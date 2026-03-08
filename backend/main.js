@@ -1,4 +1,4 @@
-const { extractMessageData, getContactList } = require('./services/whatsappService');
+const { extractMessageData, getContactList, getLastMessages } = require('./services/whatsappService');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
@@ -40,6 +40,11 @@ client.on('qr', qr => {
 client.on('message_create', async m => {
     const msgData = await extractMessageData(m);
     console.log("New message", msgData);
+    io.fetchSockets().then(socketList => {
+        socketList.forEach(_socket => {
+            _socket.emit("new-message", msgData)
+        })
+    })
 });
 
 
@@ -60,4 +65,36 @@ io.on('connection', (socket) => {
             io.emit("contact-list", contactList)
         })
     })
+    socket.on('get-last-messages', async (data) => {
+        console.log('📨 Get last messages request:', data);
+        
+        const { contactId, limit = 50 } = data;
+        
+        if (!contactId) {
+            socket.emit('last-messages', {
+                success: false,
+                error: 'contactId is required'
+            });
+            return;
+        }
+        
+        try {
+            if (typeof getLastMessages === 'function') {
+                const result = await getLastMessages(client, contactId, limit);
+                socket.emit('last-messages', result);
+            } else {
+                console.error('❌ getLastMessages is not a function');
+                socket.emit('last-messages', {
+                    success: false,
+                    error: 'getLastMessages function not available'
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting last messages:', error);
+            socket.emit('last-messages', {
+                success: false,
+                error: error.message
+            });
+        }
+    });
 });

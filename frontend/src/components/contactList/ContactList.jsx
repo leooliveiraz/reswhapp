@@ -1,17 +1,14 @@
 import React, { useState } from 'react';
-import ContactCard from './ContactCard';
+import ContactCard from '../contactCard/ContactCard';
 import './ContactList.css';
 
-function ContactList({ contacts, selectedContact, onSelectContact }) {
+function ContactList({ contacts, selectedContact, onSelectContact, lastMessages }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredContacts = contacts.filter(contact => {
     const searchLower = searchTerm.toLowerCase();
-    return (
-      contact.name?.toLowerCase().includes(searchLower) ||
-      contact.shortName?.toLowerCase().includes(searchLower) ||
-      contact.number?.includes(searchTerm)
-    );
+    const name = (contact.name || contact.shortName || contact.number || '').toLowerCase();
+    return name.includes(searchLower) || contact.number?.includes(searchTerm);
   });
 
   return (
@@ -33,11 +30,12 @@ function ContactList({ contacts, selectedContact, onSelectContact }) {
             <p>Nenhum contato encontrado</p>
           </div>
         ) : (
-          filteredContacts.map((contact, index) => (
+          filteredContacts.map((contact) => (
             <ContactCard
-              key={contact.id?._serialized || contact.number || index}
+              key={contact.id?._serialized || contact.number || contact.id?.user}
               contact={contact}
               isSelected={selectedContact?.id?._serialized === contact.id?._serialized}
+              lastMessage={lastMessages[contact.id?._serialized || contact.number || contact.id?.user]}
               onClick={() => onSelectContact(contact)}
             />
           ))

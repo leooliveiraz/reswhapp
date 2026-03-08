@@ -28,7 +28,8 @@ async function extractMessageData(message) {
     msgData = {
         id: message.id._serialized,
         author: message.author,
-        timestamp: new Date(message.timestamp * 1000).toLocaleString(),
+        dateTime: new Date(message.timestamp * 1000).toLocaleString(),
+        timestamp: message.timestamp,
         type: message.type,
         contactName: contactName,
         from: message.from,
@@ -70,7 +71,52 @@ async function getContactList(client) {
 }
 
 
+async function getLastMessages(client, contactId, limit = 50) {
+    try {
+        // Verificar se o cliente está pronto
+        if (!client) {
+            throw new Error('WhatsApp client not initialized');
+        }
+
+        // Buscar o chat pelo ID do contato
+        const chat = await client.getChatById(contactId);
+        
+        if (!chat) {
+            throw new Error('Chat not found');
+        }
+
+        // Buscar as últimas mensagens
+        const messages = await chat.fetchMessages({ limit });
+        
+        // Processar as mensagens para um formato mais amigável
+        const formattedMessages = await Promise.all(messages.map(async (msg) => {
+            return extractMessageData(msg);
+        }));
+
+        // Ordenar da mais nova para a mais antiga (opcional)
+        formattedMessages.sort((a, b) => b.timestamp - a.timestamp);
+
+        return {
+            success: true,
+            contactId: chat.id._serialized,
+            contactName: chat.name || 'Unknown',
+            unreadCount: chat.unreadCount,
+            messages: formattedMessages,
+            total: formattedMessages.length
+        };
+
+    } catch (error) {
+        console.error('Error getting last messages:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+
 module.exports = {
     extractMessageData,
-    getContactList
+    getContactList,
+    getLastMessages
 }
