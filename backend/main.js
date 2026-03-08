@@ -1,14 +1,12 @@
 const { extractMessageData, getContactList } = require('./services/whatsappService');
 const { Client, LocalAuth } = require('whatsapp-web.js');
-
 const qrcode = require('qrcode-terminal');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 
-const PORT = 3000;
-
 // server config
+const PORT = 3000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -18,6 +16,10 @@ const io = new Server(server, {
     }
 });
 app.use(express.static('public'));
+
+server.listen(PORT, () => {
+    console.log(`🚀 WebSocket server running in http://localhost:${PORT}`);
+});
 
 
 //whatsapp config
@@ -43,9 +45,6 @@ client.on('message_create', async m => {
 
 client.initialize();
 
-server.listen(PORT, () => {
-    console.log(`🚀 WebSocket server running in http://localhost:${PORT}`);
-});
 
 io.on('connection', (socket) => {
     console.log(`🟢 Client connected: ${socket.id}`);
@@ -60,6 +59,5 @@ io.on('connection', (socket) => {
         getContactList(client).then(contactList => {
             io.emit("contact-list", contactList)
         })
-        
     })
 });
