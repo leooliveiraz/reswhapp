@@ -27,12 +27,12 @@ function App() {
   const createContactFromMessage = useCallback((message) => {
     // Determinar se a mensagem é de um contato que não sou eu
     const isFromMe = message.isMe || message.fromMe;
-    
+
     // Se a mensagem é de mim, o contato é o destinatário
     // Se a mensagem é de outro, o contato é o remetente
     const contactData = isFromMe ? message.to : message.from;
     const contactName = isFromMe ? message.to : message.from;
-    
+
     // Extrair número do contato
     let contactNumber = contactData;
     if (contactData.includes('@')) {
@@ -69,9 +69,9 @@ function App() {
       // Determinar o ID do possível contato
       const isFromMe = message.isMe || message.fromMe;
       const potentialContactId = isFromMe ? message.to : message.from;
-      
+
       // Verificar se o contato já existe na lista
-      const contactExists = prevContacts.some(contact => 
+      const contactExists = prevContacts.some(contact =>
         getContactId(contact) === potentialContactId ||
         contact.number === potentialContactId?.split('@')[0]?.split(':')[0]
       );
@@ -97,7 +97,7 @@ function App() {
 
     // Determinar de qual contato é a mensagem
     const isFromMe = message.isMe || message.fromMe;
-    const contactId = isFromMe 
+    const contactId = isFromMe
       ? message.to // Se for mensagem enviada por mim, o contato é o destinatário
       : message.from; // Se for mensagem recebida, o contato é o remetente
 
@@ -114,7 +114,7 @@ function App() {
     // Atualizar mensagens do contato
     setMessagesByContact(prev => {
       const contactMessages = prev[contactId] || [];
-      
+
       // Verificar se a mensagem já existe (evitar duplicatas)
       const exists = contactMessages.some(m => m.id === message.id);
       if (exists) return prev;
@@ -141,7 +141,7 @@ function App() {
     return [...contacts].sort((a, b) => {
       const idA = getContactId(a);
       const idB = getContactId(b);
-      
+
       const lastMsgA = lastMsgs[idA];
       const lastMsgB = lastMsgs[idB];
 
@@ -193,10 +193,36 @@ function App() {
       processNewMessage(message);
     });
 
-    socket.on('last-messages',data => {
-      console.log("last message",data )
-      const msg = {...messagesByContact};
-    })
+    // Trecho de exemplo para adicionar no useEffect do App.jsx
+
+    socket.on('last-messages', (data) => {
+      console.log('📩 Histórico recebido (last-messages):', data);
+
+      // Verifique a estrutura do seu 'data'. Pode ser algo como:
+      // { contactId: "...", messages: [...] } ou uma lista diretamente.
+      // Vou assumir que você recebe um objeto com contactId e messages.
+
+      if (data && data.contactId && data.messages) {
+        // Atualiza o estado que armazena as mensagens, indexado pelo ID do contato
+        setMessagesByContact(prev => ({
+          ...prev,
+          [data.contactId]: data.messages
+        }));
+
+        // Opcional: Atualiza a última mensagem para ordenar a lista de contatos
+        if (data.messages.length > 0) {
+          const lastMsg = data.messages[data.messages.length - 1];
+          setLastMessages(prev => ({
+            ...prev,
+            [data.contactId]: {
+              text: lastMsg.body || lastMsg.text,
+              timestamp: lastMsg.timestamp,
+              fromMe: lastMsg.isMe || lastMsg.fromMe,
+            }
+          }));
+        }
+      }
+    });
 
     return () => {
       socket.off('connect');
@@ -207,18 +233,19 @@ function App() {
   }, [processNewMessage]);
 
   useEffect(() => {
-    if(isConnected){
+    if (isConnected) {
       getContactListInBackend();
     }
-  },[isConnected]);
+  }, [isConnected]);
 
   const handleSelectContact = (contact) => {
     setSelectedContact(contact);
-    // Buscar histórico do chat
-    socket.emit('get-last-messages', { 
-      contactId: getContactId(contact),
-      limit: 20
-    });
+    const contactId = getContactId(contact); // Use sua função para extrair o ID
+
+    if (!messagesByContact[contactId]) {
+      console.log('Solicitando last-messages para:', contactId);
+      socket.emit('get-last-messages', { contactId: contactId }); // Emite o evento
+    }
   };
 
   // Função para enviar mensagem
@@ -235,7 +262,7 @@ function App() {
     };
 
     socket.emit('send-message', messageData);
-    
+
     // Atualizar localmente
     processNewMessage({
       ...messageData,
@@ -248,7 +275,7 @@ function App() {
   return (
     <div className="app">
       <ConnectionStatus isConnectedToBackend={isConnected} />
-      
+
       <div className="whatsapp-layout">
         {/* Sidebar de contatos - esquerda */}
         <div className="contacts-sidebar">
@@ -256,7 +283,7 @@ function App() {
             <h2>Contatos</h2>
             <span className="contact-count">{contactList.length}</span>
           </div>
-          <ContactList 
+          <ContactList
             contacts={contactList}
             selectedContact={selectedContact}
             onSelectContact={handleSelectContact}
@@ -267,18 +294,17 @@ function App() {
         {/* Área do chat - direita */}
         <div className="chat-area">
           {selectedContact ? (
-            <ChatWindow 
+            <ChatWindow
               contact={selectedContact}
-              socket={socket}
-              messages={messagesByContact[getContactId(selectedContact)] || []}
+              messages={messagesByContact[getContactId(selectedContact)] || []} // Passa as mensagens específicas do contato
               onSendMessage={handleSendMessage}
               onClose={() => setSelectedContact(null)}
             />
           ) : (
             <div className="no-chat-selected">
               <div className="welcome-message">
-                <img 
-                  src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" 
+                <img
+                  src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"
                   alt="WhatsApp"
                   className="welcome-logo"
                 />
