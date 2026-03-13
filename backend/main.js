@@ -1,9 +1,11 @@
-const { extractMessageData, getContactList, getLastMessages } = require('./services/whatsappService');
+const { extractMessageData, getContactList, getChatList, getLastMessages } = require('./services/whatsappService');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const mongoose = require('mongoose');
+require('dotenv').config();
 
 // server config
 const PORT = 3000;
@@ -16,11 +18,8 @@ const io = new Server(server, {
     }
 });
 app.use(express.static('public'));
-
-server.listen(PORT, () => {
-    console.log(`🚀 WebSocket server running in http://localhost:${PORT}`);
-});
-
+const MessageProcessor = require('./services/messageProcessor.js');
+const processor = new MessageProcessor('./messages/');
 
 //whatsapp config
 const client = new Client({
@@ -29,8 +28,19 @@ const client = new Client({
     })
 });
 
+
+let clientInfo = {};
+
 client.on('ready', () => {
-    console.log('Whatsapp Client is ready!');
+    clientInfo = {
+        name: client.info.pushname,
+        number: client.info.wid.user,
+        id: client.info.wid._serialized
+    }
+    console.log(`Whatsapp Client is ready!\n${JSON.stringify(clientInfo)}`);
+    server.listen(PORT, () => {
+        console.log(`🚀 WebSocket server running in http://localhost:${PORT}`);
+    });
 });
 
 client.on('qr', qr => {
@@ -38,8 +48,20 @@ client.on('qr', qr => {
 });
 
 client.on('message_create', async m => {
-    const msgData = await extractMessageData(m);
-    console.log("New message", msgData);
+    const msgData = await extractMessageData(m)
+    if (!msgData) return;
+    try {
+        await mongoose.connect(process.env.MONGO_URI + "_" + clientInfo.number);
+        const db = mongoose.connection.db;
+        const collection = db.collection(msgData.chatId);
+        await collection.insertOne(msgData)
+    } catch (e) {
+        console.error('❌ Erro:', e);
+    } finally {
+        await mongoose.disconnect();
+    }
+
+    console.log("New message", msgData.from, msgData.body);
     io.fetchSockets().then(socketList => {
         socketList.forEach(_socket => {
             _socket.emit("new-message", msgData)
@@ -59,17 +81,19 @@ io.on('connection', (socket) => {
         console.log(`🔴 Client disconnected: ${socket.id}`);
         console.log(`📊 Total connections: ${io.engine.clientsCount}`);
     });
-    socket.on("get-contacts", () => {
+
+    socket.on("get-contact-list", () => {
         console.log('Get contacts:');
         getContactList(client).then(contactList => {
             io.emit("contact-list", contactList)
-        })
+        }).catch(error => console.log(error.message))
     })
+
     socket.on('get-last-messages', async (data) => {
         console.log('📨 Get last messages request:', data);
-        
         const { contactId, limit = 50 } = data;
-        
+        console.log("contactId", contactId)
+
         if (!contactId) {
             socket.emit('last-messages', {
                 success: false,
@@ -77,11 +101,12 @@ io.on('connection', (socket) => {
             });
             return;
         }
-        
+
         try {
             if (typeof getLastMessages === 'function') {
                 const result = await getLastMessages(client, contactId, limit);
                 socket.emit('last-messages', result);
+                console.log("send last messages")
             } else {
                 console.error('❌ getLastMessages is not a function');
                 socket.emit('last-messages', {
@@ -97,4 +122,12 @@ io.on('connection', (socket) => {
             });
         }
     });
+
+    socket.on("get-chat-list", () => {
+        console.log('get-chat-list');
+        getChatList(client).then(chat => {
+            io.emit("chat-list", chat)
+        })
+            .catch(error => console.log(error.message))
+    })
 });

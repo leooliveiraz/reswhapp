@@ -1,3 +1,5 @@
+const { Client } = require("whatsapp-web.js");
+
 const SHOW_MESSAGES = false;
 
 async function extractMessageData(message) {
@@ -5,27 +7,25 @@ async function extractMessageData(message) {
         return;
     }
     if (SHOW_MESSAGES) console.log("Received nessage", message);
-
+    const chat = await message.getChat();
     const me = message.notifyName;
     const isGroup = message.from.includes('@g.us');
-    const contact = await message.getContact();
-    const contactName = contact.pushname || contact.name || contact.number || 'Unknown';
+
     const isMe = message.fromMe;
     let messageInfo = '';
-
-    if (isMe) {
-        const chat = await message.getChat();
-        messageInfo = `[Me to ${chat.name || message.to}]`;
-    } else {
-        if (isGroup) {
-            const author = await message.getContact();
-            messageInfo = `[${contactName} in ${message.from}]`;
-        } else {
-            messageInfo = `[${contactName}]`;
-        }
+    let contactName ="";
+    let contact = null;
+    try{
+        contact = await message.getContact();
+        contactName = contact.pushname || contact.name || contact.number || 'Unknown';
+    } catch(e){
+        console.error(e)
     }
+    
 
     msgData = {
+        chatId: chat.id._serialized,
+        chatUser: chat.id.user,
         id: message.id._serialized,
         author: message.author,
         dateTime: new Date(message.timestamp * 1000).toLocaleString(),
@@ -67,35 +67,38 @@ async function getContactList(client) {
 
     } catch (error) {
         console.error('Error on get contact list:', error);
+        return []
+    }
+}
+
+
+async function getChatList(client) {
+    try {
+        const chatList = await client.getChats();
+        return chatList;
+
+    } catch (error) {
+        console.error('Error on get contact list:', error);
     }
 }
 
 
 async function getLastMessages(client, contactId, limit = 50) {
     try {
-        // Verificar se o cliente está pronto
         if (!client) {
             throw new Error('WhatsApp client not initialized');
         }
-
-        // Buscar o chat pelo ID do contato
         const chat = await client.getChatById(contactId);
         
         if (!chat) {
             throw new Error('Chat not found');
         }
-
-        // Buscar as últimas mensagens
         const messages = await chat.fetchMessages({ limit });
-        
-        // Processar as mensagens para um formato mais amigável
         const formattedMessages = await Promise.all(messages.map(async (msg) => {
             return extractMessageData(msg);
         }));
 
-        // Ordenar da mais nova para a mais antiga (opcional)
         formattedMessages.sort((a, b) => b.timestamp - a.timestamp);
-
         return {
             success: true,
             contactId: chat.id._serialized,
@@ -106,7 +109,7 @@ async function getLastMessages(client, contactId, limit = 50) {
         };
 
     } catch (error) {
-        console.error('Error getting last messages:', error);
+        console.error('Error getting last messages:', error.message);
         return {
             success: false,
             error: error.message
@@ -118,5 +121,6 @@ async function getLastMessages(client, contactId, limit = 50) {
 module.exports = {
     extractMessageData,
     getContactList,
+    getChatList,
     getLastMessages
 }
