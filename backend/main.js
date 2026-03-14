@@ -47,16 +47,21 @@ async function processMessage(msg) {
     }
 
     console.log("New message", msg.from, msg.body);
-    io.fetchSockets().then(socketList => {
-        socketList.forEach(_socket => {
-            _socket.emit("new-message", msg)
-        })
-    })
+    const sockets = await io.fetchSockets();
+    console.log(`4️⃣ Sockets encontrados: ${sockets.length}`);
+
+    sockets.forEach((socket, i) => {
+        console.log(`   Socket ${i}: ${socket.id}`);
+        socket.emit("new-message", msg);
+        console.log(`   ✅ Emitido para socket ${socket.id}`);
+    });
+
+    console.log("5️⃣ Finalizado emissão");
 }
 
 
 async function processMessageList() {
-    if(isProcessingMessages){
+    if (isProcessingMessages) {
         return;
     }
     try {
@@ -71,7 +76,7 @@ async function processMessageList() {
                 console.error("Error on message processment:", e)
             }
         }
-        
+
     } catch (f) {
         console.error("Error on message processment:", e)
     } finally {
@@ -86,12 +91,12 @@ client.on('ready', () => {
         number: client.info.wid.user,
         id: client.info.wid._serialized
     }
-    console.log(`Whatsapp Client is ready!\n${JSON.stringify(clientInfo)}`);
+    console.log(`Whatsapp Client is ready!\n${new Date()}\n${JSON.stringify(clientInfo)} `);
     server.listen(PORT, () => {
         console.log(`🚀 WebSocket server running in http://localhost:${PORT}`);
     });
     setInterval(() => {
-        processMessageList();
+        processMessageList().then(() => { });
     }, [10000])
 });
 
@@ -103,7 +108,7 @@ client.on('message_create', async m => {
     const msgData = await extractMessageData(m)
     if (!msgData) return;
     messageList[msgData.id] = msgData;
-    processMessageList();
+    processMessageList().then(() => { });
 });
 
 
@@ -122,7 +127,8 @@ io.on('connection', (socket) => {
     socket.on("get-contact-list", () => {
         console.log('Get contacts:');
         getContactList(client).then(contactList => {
-            io.emit("contact-list", contactList)
+            socket.emit("contact-list", contactList)
+            socket.emit("cachorro", { a: 1 })
         }).catch(error => console.log(error.message))
     })
 
@@ -163,7 +169,7 @@ io.on('connection', (socket) => {
     socket.on("get-chat-list", () => {
         console.log('get-chat-list');
         getChatList(client).then(chat => {
-            io.emit("chat-list", chat)
+            socket.emit("chat-list", chat)
         })
             .catch(error => console.log(error.message))
     })

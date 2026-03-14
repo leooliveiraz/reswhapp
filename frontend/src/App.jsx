@@ -38,9 +38,41 @@ function App() {
       console.log("Contact list received!");
       setContactList(contactListReceived);
     });
+    
     socket.on("chat-list", (chatListReceived) => {
       console.log("Chat list received!");
       setChatList(chatListReceived);
+    });
+
+    socket.on("new-message", (newMessage) => {
+      console.log("Nova mensagem recebida:", newMessage);
+      
+      // Atualiza a chatList
+      setChatList(prevChatList => {
+        // Encontra o índice do chat que recebeu a mensagem
+        const index = prevChatList.findIndex(chat => 
+          chat.id._serialized === newMessage.chatId
+        );
+        
+        if (index === -1) return prevChatList;
+        
+        // Cria uma cópia da lista
+        const updatedList = [...prevChatList];
+        
+        // Atualiza o chat com a nova mensagem
+        updatedList[index] = {
+          ...updatedList[index],
+          lastMessage: newMessage,
+          timestamp: newMessage.timestamp,
+          unreadCount: updatedList[index].unreadCount + 1
+        };
+        
+        // Move o chat para o topo
+        const [movedChat] = updatedList.splice(index, 1);
+        updatedList.unshift(movedChat);
+        
+        return updatedList;
+      });
     });
 
     return () => {
@@ -48,9 +80,11 @@ function App() {
       socket.off("disconnect");
       socket.off("contact-list");
       socket.off("chat-list");
+      socket.off("new-message"); 
       socket.disconnect();
     };
   }, []);
+
   return (
     <AppContext.Provider
       value={{
