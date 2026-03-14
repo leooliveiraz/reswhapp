@@ -1,56 +1,62 @@
 import React, { useContext, useEffect, useState } from "react";
 import { AppContext } from "../AppContext";
 import ChatHeader from "./ChatHeader";
-import "./Chat.css";
 import Message from "./Message";
+import "./Chat.css";
 
 export default function Chat() {
   const { socket, selectedContact } = useContext(AppContext);
-  const [chatList, setChatList] = useState([]);
+  const [messages, setMessages] = useState([]);
 
-  function getLastMessages() {
-    if (selectedContact) {
-      socket?.emit("get-last-messages", {
-        contactId: selectedContact.id._serialized,
-        limit: 20,
-      });
-    }
-  }
-
+  // Carrega mensagens quando seleciona um contato
   useEffect(() => {
-    socket?.on("last-messages", (lastMessages) => {
-      setChatList(lastMessages.messages);
+    if (!selectedContact || !socket) return;
+
+    // Pede as mensagens antigas
+    socket.emit("get-last-messages", {
+      contactId: selectedContact.id._serialized,
+      limit: 20,
     });
-    return () => {
-      socket?.off("last-messages");
-    };
-  }, [socket]);
 
-  useEffect(() => {
-    getLastMessages();
-  }, [selectedContact]);
+    // Escuta as mensagens antigas
+    const handleLastMessages = (lastMessages) => {
+      setMessages(lastMessages.messages || []);
+    };
+
+    socket.on("last-messages", handleLastMessages);
+
+    // Escuta mensagens novas (enquanto esse chat estiver aberto)
+    const handleNewMessage = (newMessage) => {
+      // Se for do chat atual, adiciona no INÍCIO da lista
+      if (selectedContact.id._serialized === newMessage.chatId) {
+        setMessages((prev) => [newMessage, ...prev]); // unshift
+      }
+    };
+
+    socket.on("new-message", handleNewMessage);
+
+    return () => {
+      socket.off("last-messages", handleLastMessages);
+      socket.off("new-message", handleNewMessage);
+    };
+  }, [selectedContact, socket]);
 
   return (
-    <>
-      {selectedContact && (
-        <ChatHeader
-          nome={selectedContact?.name}
-          numero={selectedContact?.id?.user}
-        ></ChatHeader>
-      )}
-
+    <div className="chat-container">
+      <ChatHeader
+        nome={selectedContact?.name}
+        numero={selectedContact?.id?.user}
+      />
       <div className="chat-messages">
-        {chatList.map((msg, index) => {
-          return (
-            <Message
-              key={msg.id}
-              msg={msg}
-              contactName={selectedContact?.name}
-              isOwn={msg.isMe}
-            />
-          );
-        })}
+        {messages.map((msg, index) => (
+          <Message
+            key={index}
+            msg={msg}
+            contactName={selectedContact?.name}
+            isOwn={msg.fromMe}
+          />
+        ))}
       </div>
-    </>
+    </div>
   );
 }

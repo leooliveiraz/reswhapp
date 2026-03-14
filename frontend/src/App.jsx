@@ -13,6 +13,19 @@ function App() {
   const [contactList, setContactList] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [chatList, setChatList] = useState([]);
+  const handleSelectContact = (contact) => {
+    setSelectedContact(contact);
+    
+    // Zera o contador de não lidas para este chat
+    setChatList(prevChatList => 
+      prevChatList.map(chat => 
+        chat.id._serialized === contact.id._serialized 
+          ? { ...chat, unreadCount: 0 } 
+          : chat
+      )
+    );
+  };
+
 
   useEffect(() => {
     socketRef.current = io("http://localhost:3000", {
@@ -47,19 +60,14 @@ function App() {
     socket.on("new-message", (newMessage) => {
       console.log("Nova mensagem recebida:", newMessage);
       
-      // Atualiza a chatList
       setChatList(prevChatList => {
-        // Encontra o índice do chat que recebeu a mensagem
         const index = prevChatList.findIndex(chat => 
           chat.id._serialized === newMessage.chatId
         );
         
         if (index === -1) return prevChatList;
         
-        // Cria uma cópia da lista
         const updatedList = [...prevChatList];
-        
-        // Atualiza o chat com a nova mensagem
         updatedList[index] = {
           ...updatedList[index],
           lastMessage: newMessage,
@@ -67,7 +75,6 @@ function App() {
           unreadCount: updatedList[index].unreadCount + 1
         };
         
-        // Move o chat para o topo
         const [movedChat] = updatedList.splice(index, 1);
         updatedList.unshift(movedChat);
         
@@ -89,8 +96,9 @@ function App() {
     <AppContext.Provider
       value={{
         selectedContact,
-        setSelectedContact,
+        setSelectedContact: handleSelectContact,
         chatList,
+        setChatList,
         socket: socketRef.current,
       }}
     >
