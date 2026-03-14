@@ -1,42 +1,56 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
+import { AppContext } from "../AppContext";
+import ChatHeader from "./ChatHeader";
+import "./Chat.css";
+import Message from "./Message";
 
-export default function Chat({ contactId, socket }) {
-    const [chatList, setChatList] = useState([]);
+export default function Chat() {
+  const { socket, selectedContact } = useContext(AppContext);
+  const [chatList, setChatList] = useState([]);
 
-    function getLastMessages() {
-        console.log("getting messages from", contactId)
-        if (contactId) {
-            socket.emit("get-last-messages", { contactId: contactId, limit: 20 })
-        }
-
+  function getLastMessages() {
+    if (selectedContact) {
+      socket?.emit("get-last-messages", {
+        contactId: selectedContact.id._serialized,
+        limit: 20,
+      });
     }
+  }
 
-    useEffect(() => {
-        socket.on('last-messages', (lastMessages) => {
-            console.log('Recebido lista de chats');
-            console.log(lastMessages)
-            setChatList(lastMessages.messages)
-        });
-        return () => {
-            socket.off('last-messages');
-        }
-    }, [])
+  useEffect(() => {
+    socket?.on("last-messages", (lastMessages) => {
+      setChatList(lastMessages.messages);
+    });
+    return () => {
+      socket?.off("last-messages");
+    };
+  }, [socket]);
 
-    useEffect(() => {
-        getLastMessages();
-    }, [contactId])
+  useEffect(() => {
+    getLastMessages();
+  }, [selectedContact]);
 
+  return (
+    <>
+      {selectedContact && (
+        <ChatHeader
+          nome={selectedContact?.name}
+          numero={selectedContact?.id?.user}
+        ></ChatHeader>
+      )}
 
-    return <>
-        {contactId}
-        <div>
-            {chatList.map(msg => {
-                return <div>
-                    {msg.isMe ? msg.contactName :  msg.contactName}: <br></br>
-                    {msg.body} <br></br>                   
-                </div>
-            })}
-        </div>
+      <div className="chat-messages">
+        {chatList.map((msg, index) => {
+          return (
+            <Message
+              key={msg.id}
+              msg={msg}
+              contactName={selectedContact?.name}
+              isOwn={msg.isMe}
+            />
+          );
+        })}
+      </div>
     </>
-
+  );
 }

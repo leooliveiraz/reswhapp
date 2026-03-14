@@ -1,0 +1,14 @@
+.chat-messages {
+    padding: 10px;
+    width: 100%; /* Ocupa toda largura disponível */
+    max-width: 100%; /* Não ultrapassa o container */
+    overflow-x: hidden; /* Esconde scroll horizontal */
+    box-sizing: border-box; /* Inclui padding na largura total */
+}
+
+.chat-messages > div {
+    max-width: 100%; /* Cada mensagem não ultrapassa o container */
+    word-wrap: break-word; /* Quebra palavras longas */
+    word-break: break-word; /* Força quebra de palavras */
+    white-space: pre-wrap; /* Preserva espaços mas quebra linhas */
+}

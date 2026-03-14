@@ -1,0 +1,43 @@
+/* Container.css */
+.container {
+  /* Centralização */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  /* Tamanho responsivo - sempre 80% da viewport */
+  width: 80vw; /* 80% da largura da viewport */
+  height: 80vh; /* 80% da altura da viewport */
+
+  /* Limites mínimos para não ficar muito pequeno */
+  min-width: 300px;
+  min-height: 400px;
+
+  /* Limites máximos para não ficar enorme em telas gigantes */
+  max-width: 1200px;
+  max-height: 900px;
+
+  /* Visual */
+  background-color: #2a3942;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+
+  /* Sombra para destacar */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.chat-list-container {
+  width: 300px;
+  border-right: 1px solid #e0e0e0;
+  overflow-y: auto; /* Scroll se tiver muitos contatos */
+}
+
+.chat-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
