@@ -30,6 +30,55 @@ const client = new Client({
 
 
 let clientInfo = {};
+let messageList = {};
+let isProcessingMessages = false;
+
+async function processMessage(msg) {
+    try {
+        await mongoose.connect(process.env.MONGO_URI + "_" + clientInfo.number);
+        const db = mongoose.connection.db;
+        const collection = db.collection(msg.chatId);
+        await collection.insertOne(msg)
+    } catch (e) {
+        console.error('❌ Error:', e);
+        throw e;
+    } finally {
+        await mongoose.disconnect();
+    }
+
+    console.log("New message", msg.from, msg.body);
+    io.fetchSockets().then(socketList => {
+        socketList.forEach(_socket => {
+            _socket.emit("new-message", msg)
+        })
+    })
+}
+
+
+async function processMessageList() {
+    if(isProcessingMessages){
+        return;
+    }
+    try {
+        isProcessingMessages = true;
+        const keys = Object.keys(messageList);
+        for (const key of keys) {
+            console.log("processing ", key)
+            try {
+                await processMessage(messageList[key]);
+                delete messageList[key];
+            } catch (e) {
+                console.error("Error on message processment:", e)
+            }
+        }
+        
+    } catch (f) {
+        console.error("Error on message processment:", e)
+    } finally {
+        isProcessingMessages = false;
+    }
+
+}
 
 client.on('ready', () => {
     clientInfo = {
@@ -41,6 +90,9 @@ client.on('ready', () => {
     server.listen(PORT, () => {
         console.log(`🚀 WebSocket server running in http://localhost:${PORT}`);
     });
+    setInterval(() => {
+        processMessageList();
+    }, [10000])
 });
 
 client.on('qr', qr => {
@@ -50,23 +102,8 @@ client.on('qr', qr => {
 client.on('message_create', async m => {
     const msgData = await extractMessageData(m)
     if (!msgData) return;
-    try {
-        await mongoose.connect(process.env.MONGO_URI + "_" + clientInfo.number);
-        const db = mongoose.connection.db;
-        const collection = db.collection(msgData.chatId);
-        await collection.insertOne(msgData)
-    } catch (e) {
-        console.error('❌ Erro:', e);
-    } finally {
-        await mongoose.disconnect();
-    }
-
-    console.log("New message", msgData.from, msgData.body);
-    io.fetchSockets().then(socketList => {
-        socketList.forEach(_socket => {
-            _socket.emit("new-message", msgData)
-        })
-    })
+    messageList[msgData.id] = msgData;
+    processMessageList();
 });
 
 
