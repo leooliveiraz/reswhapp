@@ -8,28 +8,23 @@ export default function Chat() {
   const { socket, selectedContact } = useContext(AppContext);
   const [messages, setMessages] = useState([]);
 
-  // Carrega mensagens quando seleciona um contato
   useEffect(() => {
     if (!selectedContact || !socket) return;
 
-    // Pede as mensagens antigas
     socket.emit("get-last-messages", {
       contactId: selectedContact.id._serialized,
       limit: 20,
     });
 
-    // Escuta as mensagens antigas
     const handleLastMessages = (lastMessages) => {
       setMessages(lastMessages.messages || []);
     };
 
     socket.on("last-messages", handleLastMessages);
 
-    // Escuta mensagens novas (enquanto esse chat estiver aberto)
     const handleNewMessage = (newMessage) => {
-      // Se for do chat atual, adiciona no INÍCIO da lista
       if (selectedContact.id._serialized === newMessage.chatId) {
-        setMessages((prev) => [newMessage, ...prev]); // unshift
+        setMessages((prev) => [newMessage, ...prev]);
       }
     };
 
@@ -50,10 +45,10 @@ export default function Chat() {
       <div className="chat-messages">
         {messages.map((msg, index) => (
           <Message
-            key={index}
+            key={msg.id}
             msg={msg}
             contactName={selectedContact?.name}
-            isOwn={msg.fromMe}
+            isOwn={msg.isMe}
           />
         ))}
       </div>

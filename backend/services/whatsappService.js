@@ -1,8 +1,12 @@
+const fs = require('fs');
+const path = require("path");
 const { Client } = require("whatsapp-web.js");
+require('dotenv').config();
 
+const MEDIA_DIR = process.env.MONGO_URI || "./media/";
 const SHOW_MESSAGES = false;
 
-async function extractMessageData(message) {
+async function extractMessageData(message,realizeDownload) {
     if (message.from === 'status@broadcast' || message.id.remote === 'status@broadcast' || message._data.remote === 'status@broadcast') {
         return;
     }
@@ -53,6 +57,29 @@ async function extractMessageData(message) {
         location: message.location
     }
 
+    if(realizeDownload && msgData.hasMedia){
+        const downloadFileData = ensureContactDir(msgData.chatId);
+        const contactDir = downloadFileData.dirPath;
+        const media = await message.downloadMedia();
+        if (media) {
+            // Gera nome do arquivo com timestamp
+            const timestamp = Date.now();
+            const fileName = generateFileName(contactName, media.mimetype, timestamp);
+            const filePath = path.join(contactDir, fileName);
+            console.log(filePath)
+            // Salva o arquivo
+            fs.writeFileSync(filePath, media.data, 'base64');
+            
+            console.log(`✅ Imagem salva em: ${filePath}`);
+            console.log(`   Tipo: ${media.mimetype}`);
+            console.log(`   Tamanho: ${Math.round(media.data.length * 0.75 / 1024)} KB`);
+            msgData.filePathRelative = filePath;
+            msgData.filePathAbsolute = path.resolve(filePath);
+            msgData.filePathDir = downloadFileData.safeName;
+            msgData.fileName = fileName;
+        }
+    }
+
     return msgData;
 }
 
@@ -95,7 +122,7 @@ async function getLastMessages(client, contactId, limit = 50) {
         }
         const messages = await chat.fetchMessages({ limit });
         const formattedMessages = await Promise.all(messages.map(async (msg) => {
-            return extractMessageData(msg);
+            return extractMessageData(msg,false);
         }));
 
         formattedMessages.sort((a, b) => b.timestamp - a.timestamp);
@@ -117,6 +144,23 @@ async function getLastMessages(client, contactId, limit = 50) {
     }
 }
 
+function ensureContactDir(contactName) {
+    const safeName = contactName.replace(/[^\w\s]/gi, '_');
+    const dirPath = path.join('./', 'downloads', safeName);
+    
+    if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+        console.log(`📁 Pasta criada: ${dirPath}`);
+    }
+    
+    return {dirPath ,safeName};
+}
+
+function generateFileName(contactName, mediaType, timestamp) {
+    const safeName = contactName.replace(/[^\w\s]/gi, '_');
+    const extension = mediaType.split('/')[1] || 'bin';
+    return `${safeName}_${timestamp}.${extension}`;
+}
 
 module.exports = {
     extractMessageData,

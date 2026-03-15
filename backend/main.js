@@ -5,6 +5,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
+const path = require('path');
 require('dotenv').config();
 
 // server config
@@ -18,6 +19,8 @@ const io = new Server(server, {
     }
 });
 app.use(express.static('public'));
+app.use('/images', express.static(path.join(__dirname, 'downloads')));
+
 const MessageProcessor = require('./services/messageProcessor.js');
 const processor = new MessageProcessor('./messages/');
 
@@ -101,14 +104,22 @@ client.on('ready', () => {
 });
 
 client.on('qr', qr => {
-    qrcode.generate(qr, { small: true });
+    try {
+        qrcode.generate(qr, { small: true });
+    } catch (error) {
+        console.error("Error on generate qrcode");        
+    }
 });
 
 client.on('message_create', async m => {
-    const msgData = await extractMessageData(m)
-    if (!msgData) return;
-    messageList[msgData.id] = msgData;
-    processMessageList().then(() => { });
+    try {        
+        const msgData = await extractMessageData(m,true)
+        if (!msgData) return;
+        messageList[msgData.id] = msgData;
+        processMessageList().then(() => { });
+    } catch (error) {
+        console.error("Message creation process error:",e);
+    }
 });
 
 
