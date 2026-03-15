@@ -11,7 +11,7 @@ export default function Chat() {
   useEffect(() => {
     if (!selectedContact || !socket) return;
 
-    socket.emit("get-last-messages", {
+    socket.emit("get-message-historic", {
       contactId: selectedContact.id._serialized,
       limit: 20,
     });

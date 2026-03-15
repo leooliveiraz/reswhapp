@@ -79,7 +79,8 @@ async function extractMessageData(message,realizeDownload) {
             msgData.fileName = fileName;
         }
     }
-
+    if(msgData.hasMedia) 
+        console.log(message)
     return msgData;
 }
 

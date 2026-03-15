@@ -1,4 +1,5 @@
 const { extractMessageData, getContactList, getChatList, getLastMessages } = require('./services/whatsappService');
+const { getMessageFromContact } = require('./services/messageDataBase.js');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
@@ -107,18 +108,18 @@ client.on('qr', qr => {
     try {
         qrcode.generate(qr, { small: true });
     } catch (error) {
-        console.error("Error on generate qrcode");        
+        console.error("Error on generate qrcode");
     }
 });
 
 client.on('message_create', async m => {
-    try {        
-        const msgData = await extractMessageData(m,true)
+    try {
+        const msgData = await extractMessageData(m, true)
         if (!msgData) return;
         messageList[msgData.id] = msgData;
         processMessageList().then(() => { });
     } catch (error) {
-        console.error("Message creation process error:",e);
+        console.error("Message creation process error:", e);
     }
 });
 
@@ -143,6 +144,7 @@ io.on('connection', (socket) => {
         }).catch(error => console.log(error.message))
     })
 
+    //deprecated
     socket.on('get-last-messages', async (data) => {
         console.log('📨 Get last messages request:', data);
         const { contactId, limit = 50 } = data;
@@ -161,6 +163,38 @@ io.on('connection', (socket) => {
                 const result = await getLastMessages(client, contactId, limit);
                 socket.emit('last-messages', result);
                 console.log("send last messages")
+            } else {
+                console.error('❌ getLastMessages is not a function');
+                socket.emit('last-messages', {
+                    success: false,
+                    error: 'getLastMessages function not available'
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting last messages:', error);
+            socket.emit('last-messages', {
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    socket.on('get-message-historic', async (data) => {
+        console.log('📨 Get last messages request:', data);
+        const { contactId, limit = 50 } = data;
+
+        if (!contactId) {
+            socket.emit('last-messages', {
+                success: false,
+                error: 'contactId is required'
+            });
+            return;
+        }
+
+        try {
+            if (typeof getMessageFromContact === 'function') {
+                const result = await getMessageFromContact(clientInfo, contactId, limit);
+                socket.emit('last-messages', result);
             } else {
                 console.error('❌ getLastMessages is not a function');
                 socket.emit('last-messages', {
