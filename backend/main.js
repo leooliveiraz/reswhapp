@@ -26,10 +26,16 @@ const MessageProcessor = require('./services/messageProcessor.js');
 const processor = new MessageProcessor('./messages/');
 
 //whatsapp config
+const CHROMIUM_TIMEOUT= 60 *1000;
 const client = new Client({
     authStrategy: new LocalAuth({
-        dataPath: '.reswhapp-data/'
-    })
+        dataPath: process.env.CHROMIUM_DATA
+    }),
+    puppeteer: {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        protocolTimeout: CHROMIUM_TIMEOUT  // Aumenta o timeout para 120 segundos (o padrão é 30s)
+    }
 });
 
 
@@ -76,17 +82,21 @@ async function processMessageList() {
             try {
                 await processMessage(messageList[key]);
                 delete messageList[key];
-            } catch (e) {
-                console.error("Error on message processment:", e)
+            } catch (error) {
+                console.error("Error on message processment:", error)
             }
         }
 
-    } catch (f) {
-        console.error("Error on message processment:", e)
+    } catch (error2) {
+        console.error("Error on message processment:", error2)
     } finally {
         isProcessingMessages = false;
     }
 
+}
+
+function addOnMessageProcessList(message) {
+    messageList[message.id] = message;
 }
 
 client.on('ready', () => {
@@ -116,10 +126,10 @@ client.on('message_create', async m => {
     try {
         const msgData = await extractMessageData(m, true)
         if (!msgData) return;
-        messageList[msgData.id] = msgData;
+        addOnMessageProcessList(msgData);
         processMessageList().then(() => { });
     } catch (error) {
-        console.error("Message creation process error:", e);
+        console.error("Message creation process error:", error);
     }
 });
 
@@ -147,8 +157,7 @@ io.on('connection', (socket) => {
     //deprecated
     socket.on('get-last-messages', async (data) => {
         console.log('📨 Get last messages request:', data);
-        const { contactId, limit = 50 } = data;
-        console.log("contactId", contactId)
+        const { contactId, limit = Infinity } = data;
 
         if (!contactId) {
             socket.emit('last-messages', {
@@ -160,9 +169,10 @@ io.on('connection', (socket) => {
 
         try {
             if (typeof getLastMessages === 'function') {
-                const result = await getLastMessages(client, contactId, limit);
-                socket.emit('last-messages', result);
-                console.log("send last messages")
+                getLastMessages(client, contactId, limit).then(result => {
+                    result.messages.forEach(msg => addOnMessageProcessList(msg))
+                    console.log("messages has been updated!")
+                });
             } else {
                 console.error('❌ getLastMessages is not a function');
                 socket.emit('last-messages', {
@@ -180,7 +190,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('get-message-historic', async (data) => {
-        console.log('📨 Get last messages request:', data);
+        console.log('📨 Get message historic request:', data);
         const { contactId, limit = 50 } = data;
 
         if (!contactId) {

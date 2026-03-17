@@ -10,11 +10,14 @@ export default function Chat() {
 
   useEffect(() => {
     if (!selectedContact || !socket) return;
-
     socket.emit("get-message-historic", {
       contactId: selectedContact.id._serialized,
       limit: 20,
     });
+    // socket.emit("get-last-messages", {
+    //   contactId: selectedContact.id._serialized,
+    //   limit: 1000,
+    // });
 
     const handleLastMessages = (lastMessages) => {
       setMessages(lastMessages.messages || []);

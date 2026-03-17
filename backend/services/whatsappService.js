@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require("path");
 const { Client } = require("whatsapp-web.js");
+const { setTimeout } = require("timers/promises");
 require('dotenv').config();
 
 const MEDIA_DIR = process.env.MONGO_URI || "./media/";
@@ -123,7 +124,7 @@ async function getLastMessages(client, contactId, limit = 50) {
         }
         const messages = await chat.fetchMessages({ limit });
         const formattedMessages = await Promise.all(messages.map(async (msg) => {
-            return extractMessageData(msg,false);
+            return extractMessageData(msg,true);
         }));
 
         formattedMessages.sort((a, b) => b.timestamp - a.timestamp);

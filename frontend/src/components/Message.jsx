@@ -2,7 +2,7 @@ import React from "react";
 import "./Message.css";
 
 export default function Message({ msg, contactName, isOwn }) {
-  const nome = isOwn ? "Você" : contactName;
+  const nome = isOwn ? "Você" : msg.contactName	;
   const horario = msg.timestamp
     ? new Date(msg.timestamp).toLocaleTimeString()
     : new Date().toLocaleTimeString();
