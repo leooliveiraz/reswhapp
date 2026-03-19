@@ -4,7 +4,7 @@ const { Client } = require("whatsapp-web.js");
 const { setTimeout } = require("timers/promises");
 require('dotenv').config();
 
-const MEDIA_DIR = process.env.MONGO_URI || "./media/";
+const MEDIA_DIR = process.env.MEDIA_DIR || "./media/";
 const SHOW_MESSAGES = false;
 
 async function extractMessageData(message,realizeDownload) {
@@ -80,7 +80,7 @@ async function extractMessageData(message,realizeDownload) {
             msgData.fileName = fileName;
         }
     }
-    if(msgData.hasMedia) 
+    if(realizeDownload && msgData.hasMedia) 
         console.log(message)
     return msgData;
 }

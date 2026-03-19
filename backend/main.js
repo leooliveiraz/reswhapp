@@ -1,5 +1,6 @@
 const { extractMessageData, getContactList, getChatList, getLastMessages } = require('./services/whatsappService');
-const { getMessageFromContact } = require('./services/messageDataBase.js');
+const { getMessageFromContact, saveMessage, saveLastChatMessage } = require('./services/messageDataBase.js');
+const { saveLastChatMessageMass } = require('./services/chatDataBase.js');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
@@ -26,7 +27,7 @@ const MessageProcessor = require('./services/messageProcessor.js');
 const processor = new MessageProcessor('./messages/');
 
 //whatsapp config
-const CHROMIUM_TIMEOUT= 60 *1000;
+const CHROMIUM_TIMEOUT = 60 * 1000;
 const client = new Client({
     authStrategy: new LocalAuth({
         dataPath: process.env.CHROMIUM_DATA
@@ -44,17 +45,8 @@ let messageList = {};
 let isProcessingMessages = false;
 
 async function processMessage(msg) {
-    try {
-        await mongoose.connect(process.env.MONGO_URI + "_" + clientInfo.number);
-        const db = mongoose.connection.db;
-        const collection = db.collection(msg.chatId);
-        await collection.insertOne(msg)
-    } catch (e) {
-        console.error('❌ Error:', e);
-        throw e;
-    } finally {
-        await mongoose.disconnect();
-    }
+    await saveMessage(msg, clientInfo.number);
+    await saveLastChatMessage(msg, clientInfo.number);
 
     console.log("New message", msg.from, msg.body);
     const sockets = await io.fetchSockets();
@@ -83,7 +75,12 @@ async function processMessageList() {
                 await processMessage(messageList[key]);
                 delete messageList[key];
             } catch (error) {
-                console.error("Error on message processment:", error)
+                if (error.name === 'MongoServerError') {
+                    console.log('✅ É um MongoServerError');
+                    delete messageList[key];
+                } else {
+                    console.error("Error on message processment:", error)
+                }
             }
         }
 
@@ -149,8 +146,8 @@ io.on('connection', (socket) => {
     socket.on("get-contact-list", () => {
         console.log('Get contacts:');
         getContactList(client).then(contactList => {
+            me
             socket.emit("contact-list", contactList)
-            socket.emit("cachorro", { a: 1 })
         }).catch(error => console.log(error.message))
     })
 
@@ -223,9 +220,10 @@ io.on('connection', (socket) => {
 
     socket.on("get-chat-list", () => {
         console.log('get-chat-list');
-        getChatList(client).then(chat => {
-            socket.emit("chat-list", chat)
+        getChatList(client).then(chatList => {
+            saveLastChatMessageMass(chatList, clientInfo.number).then(() => { })
+            socket.emit("chat-list", chatList)
         })
-            .catch(error => console.log(error.message))
+        .catch(error => console.error("error", error.message))
     })
 });

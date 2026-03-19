@@ -12,7 +12,7 @@ export default function Chat() {
     if (!selectedContact || !socket) return;
     socket.emit("get-message-historic", {
       contactId: selectedContact.id._serialized,
-      limit: 20,
+      limit: 500,
     });
     // socket.emit("get-last-messages", {
     //   contactId: selectedContact.id._serialized,
