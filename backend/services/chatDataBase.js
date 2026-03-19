@@ -2,6 +2,7 @@ require("dotenv").config();
 const { extractMessageData } = require('./whatsappService');
 const mongoose = require("mongoose");
 let isUniqueMessagesIndexCreate = false;
+const LAST_CHAT_MESSAGE = "last-chat-message"
 
 async function saveLastChatMessageMass(chatList, clientNumber) {
     chatParsedList = []
@@ -32,4 +33,24 @@ async function saveLastChatMessageMass(chatList, clientNumber) {
 }
 
 
-module.exports = { saveLastChatMessageMass };
+async function getChatListDB(clientInfo, limit = 500) {
+    await mongoose.connect(process.env.MONGO_URI + "_" + clientInfo.number);
+    const db = mongoose.connection.db;
+    const collection = db.collection("LAST_CHAT_MESSAGE");
+    const messageList = await collection
+        .find({})
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .toArray();
+    return {
+        success: true,
+        contactId: contactId,
+        contactName: null,
+        unreadCount: 0,
+        messages: messageList,
+        total: messageList.length,
+    };
+}
+
+
+module.exports = { saveLastChatMessageMass,getChatListDB };

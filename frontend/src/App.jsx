@@ -6,6 +6,7 @@ import ChatList from "./components/ChatList";
 import { AppContext } from "./AppContext";
 import Chat from "./components/Chat";
 import Container from "./components/Container";
+const WS_URL = import.meta.env.VITE_SOCKET_URL;
 
 function App() {
   const socketRef = useRef(null);
@@ -28,7 +29,7 @@ function App() {
 
 
   useEffect(() => {
-    socketRef.current = io("http://localhost:3000", {
+    socketRef.current = io( WS_URL, {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,

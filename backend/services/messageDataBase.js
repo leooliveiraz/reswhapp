@@ -12,6 +12,7 @@ async function getMessageFromContact(clientInfo, contactId, limit = 50) {
         .sort({ timestamp: -1 })
         .limit(limit)
         .toArray();
+    messageList.reverse();
     return {
         success: true,
         contactId: contactId,

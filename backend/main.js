@@ -1,6 +1,6 @@
 const { extractMessageData, getContactList, getChatList, getLastMessages } = require('./services/whatsappService');
 const { getMessageFromContact, saveMessage, saveLastChatMessage } = require('./services/messageDataBase.js');
-const { saveLastChatMessageMass } = require('./services/chatDataBase.js');
+const { saveLastChatMessageMass, getChatListDB } = require('./services/chatDataBase.js');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
@@ -106,9 +106,20 @@ client.on('ready', () => {
     server.listen(PORT, () => {
         console.log(`🚀 WebSocket server running in http://localhost:${PORT}`);
     });
+    getChatList(client).then(chatList => {
+        saveLastChatMessageMass(chatList, clientInfo.number).then(() => { })
+    })
+
     setInterval(() => {
         processMessageList().then(() => { });
-    }, [10000])
+    }, [10 * 1000]);
+
+    setInterval(() => {
+        getChatList(client).then(chatList => {
+            saveLastChatMessageMass(chatList, clientInfo.number).then(() => { })
+        })
+    }, [5 * 60 * 1000]);
+
 });
 
 client.on('qr', qr => {
@@ -223,7 +234,6 @@ io.on('connection', (socket) => {
         getChatList(client).then(chatList => {
             saveLastChatMessageMass(chatList, clientInfo.number).then(() => { })
             socket.emit("chat-list", chatList)
-        })
-        .catch(error => console.error("error", error.message))
+        }).catch(error => console.error("error", error.message))
     })
 });

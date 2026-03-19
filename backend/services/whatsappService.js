@@ -104,6 +104,7 @@ async function getContactList(client) {
 async function getChatList(client) {
     try {
         const chatList = await client.getChats();
+        chatList.sort((a, b) => b.timestamp - a.timestamp);
         return chatList;
 
     } catch (error) {

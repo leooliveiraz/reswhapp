@@ -67,3 +67,18 @@
     max-width: 100px;
     max-height: 100px;
 }
+
+/* Adicione ao seu Message.css */
+.clickable-media {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.clickable-media:hover {
+  transform: scale(1.02);
+  opacity: 0.9;
+}
+
+.message-image, .message-sticker {
+  cursor: pointer;
+}
