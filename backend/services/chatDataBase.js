@@ -16,10 +16,14 @@ async function saveLastChatMessageMass(chatList, clientNumber) {
 
     await mongoose.connect(process.env.MONGO_URI + "_" + clientNumber);
     const db = mongoose.connection.db;
-    const collection = db.collection("last-chat-message");
+    const collection = db.collection(LAST_CHAT_MESSAGE);
     if (!isUniqueMessagesIndexCreate) {
-        await collection.createIndex({ chatId: 1 }, { unique: true, name: "chat_id_unique" });
-        isUniqueMessagesIndexCreate = true;
+        try {
+            await collection.createIndex({ chatId: 1 }, { unique: true, name: "chat_id_unique" });
+            isUniqueMessagesIndexCreate = true;
+        } catch (e) {
+            console.log(e.message, "chatDataBase.js", e.lineNumber)
+        }
     }
     try {
         for (const chat of chatParsedList) {
@@ -36,7 +40,7 @@ async function saveLastChatMessageMass(chatList, clientNumber) {
 async function getChatListDB(clientInfo, limit = 500) {
     await mongoose.connect(process.env.MONGO_URI + "_" + clientInfo.number);
     const db = mongoose.connection.db;
-    const collection = db.collection("LAST_CHAT_MESSAGE");
+    const collection = db.collection(LAST_CHAT_MESSAGE);
     const messageList = await collection
         .find({})
         .sort({ timestamp: -1 })
@@ -53,4 +57,4 @@ async function getChatListDB(clientInfo, limit = 500) {
 }
 
 
-module.exports = { saveLastChatMessageMass,getChatListDB };
+module.exports = { saveLastChatMessageMass, getChatListDB };
