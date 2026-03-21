@@ -12,7 +12,9 @@ export default function Chat() {
   const messagesContainerRef = useRef(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   };
 
   useEffect(() => {
@@ -21,7 +23,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (!selectedContact || !socket) return;
-    
+
     socket.emit("get-message-historic", {
       contactId: selectedContact.id._serialized,
       limit: 500,
@@ -55,13 +57,12 @@ export default function Chat() {
         numero={selectedContact?.id?.user}
       />
       <div className="chat-messages" ref={messagesContainerRef}>
-        {messages.map((msg, index) => (
+        {messages.map((msg) => (
           <Message
             key={msg.id}
             msg={msg}
             contactName={selectedContact?.name}
             isOwn={msg.isMe}
-            allMessages={messages} // Passa todas as mensagens para navegação
           />
         ))}
         <div ref={messagesEndRef} className="chat-messages" />

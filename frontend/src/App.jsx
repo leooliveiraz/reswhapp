@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import io from "socket.io-client";
 import "./App.css";
-import ContactList from "./components/ContactList";
-import ChatList from "./components/ChatList";
 import { AppContext } from "./AppContext";
-import Chat from "./components/Chat";
 import Container from "./components/Container";
+import ImageViewer from "./components/ImageViewer";
 const WS_URL = import.meta.env.VITE_SOCKET_URL;
+const IMAGE_URL =
+  import.meta.env.VITE_IMAGE_URL || "http://localhost:3000/images";
 
 function App() {
   const socketRef = useRef(null);
@@ -14,22 +14,28 @@ function App() {
   const [contactList, setContactList] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [chatList, setChatList] = useState([]);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [currentMedia, setCurrentMedia] = useState(null);
+
   const handleSelectContact = (contact) => {
     setSelectedContact(contact);
-    
+
     // Zera o contador de não lidas para este chat
-    setChatList(prevChatList => 
-      prevChatList.map(chat => 
-        chat.id._serialized === contact.id._serialized 
-          ? { ...chat, unreadCount: 0 } 
-          : chat
-      )
+    setChatList((prevChatList) =>
+      prevChatList.map((chat) =>
+        chat.id._serialized === contact.id._serialized
+          ? { ...chat, unreadCount: 0 }
+          : chat,
+      ),
     );
   };
 
+  useEffect(() => {
+    setViewerOpen(currentMedia ? true : false);
+  }, [currentMedia]);
 
   useEffect(() => {
-    socketRef.current = io( WS_URL, {
+    socketRef.current = io(WS_URL, {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
@@ -52,7 +58,7 @@ function App() {
       console.log("Contact list received!");
       setContactList(contactListReceived);
     });
-    
+
     socket.on("chat-list", (chatListReceived) => {
       console.log("Chat list received!");
       setChatList(chatListReceived);
@@ -60,25 +66,25 @@ function App() {
 
     socket.on("new-message", (newMessage) => {
       console.log("Nova mensagem recebida:", newMessage);
-      
-      setChatList(prevChatList => {
-        const index = prevChatList.findIndex(chat => 
-          chat.id._serialized === newMessage.chatId
+
+      setChatList((prevChatList) => {
+        const index = prevChatList.findIndex(
+          (chat) => chat.id._serialized === newMessage.chatId,
         );
-        
+
         if (index === -1) return prevChatList;
-        
+
         const updatedList = [...prevChatList];
         updatedList[index] = {
           ...updatedList[index],
           lastMessage: newMessage,
           timestamp: newMessage.timestamp,
-          unreadCount: updatedList[index].unreadCount + 1
+          unreadCount: updatedList[index].unreadCount + 1,
         };
-        
+
         const [movedChat] = updatedList.splice(index, 1);
         updatedList.unshift(movedChat);
-        
+
         return updatedList;
       });
     });
@@ -88,7 +94,7 @@ function App() {
       socket.off("disconnect");
       socket.off("contact-list");
       socket.off("chat-list");
-      socket.off("new-message"); 
+      socket.off("new-message");
       socket.disconnect();
     };
   }, []);
@@ -101,9 +107,21 @@ function App() {
         chatList,
         setChatList,
         socket: socketRef.current,
+        viewerOpen,
+        setViewerOpen,
+        setCurrentMedia,
       }}
     >
       <Container></Container>
+
+      {viewerOpen && currentMedia && (
+        <ImageViewer
+          isOpen={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          imageUrl={`${IMAGE_URL}/${currentMedia.filePathDir}/${currentMedia.fileName}`}
+          message={currentMedia}
+        />
+      )}
     </AppContext.Provider>
   );
 }
