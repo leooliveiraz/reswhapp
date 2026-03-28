@@ -4,9 +4,9 @@ import "./App.css";
 import { AppContext } from "./AppContext";
 import Container from "./components/Container";
 import ImageViewer from "./components/ImageViewer";
-const WS_URL = import.meta.env.VITE_SOCKET_URL;
-const IMAGE_URL =
-  import.meta.env.VITE_IMAGE_URL || "http://localhost:3000/images";
+
+const WS_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+const IMAGE_URL = import.meta.env.VITE_IMAGE_URL;
 
 function App() {
   const socketRef = useRef(null);
@@ -20,7 +20,6 @@ function App() {
   const handleSelectContact = (contact) => {
     setSelectedContact(contact);
 
-    // Zera o contador de não lidas para este chat
     setChatList((prevChatList) =>
       prevChatList.map((chat) =>
         chat.id._serialized === contact.id._serialized
@@ -35,41 +34,66 @@ function App() {
   }, [currentMedia]);
 
   useEffect(() => {
-    socketRef.current = io(WS_URL, {
+    const socketUrl = WS_URL || window.location.origin;
+    socketRef.current = io(socketUrl, {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      timeout: 20000,
+      autoConnect: true
     });
+    
     const socket = socketRef.current;
 
     socket.on("connect", () => {
-      console.log("Connected to the server!", socket.id);
+      console.log("✅ Connected to the server!", socket.id);
       setIsConnected(true);
-      socket.emit("get-contact-list");
-      socket.emit("get-chat-list");
+      setTimeout(() => {
+        socket.emit("get-contact-list");
+        socket.emit("get-chat-list");
+      }, 500);
     });
 
-    socket.on("disconnect", () => {
-      console.log("Disconnected from the server!");
+    socket.on("connect_error", (error) => {
+      console.error("❌ Connection error:", error.message);
       setIsConnected(false);
+      
+      if (error.message.includes('websocket')) {
+        console.log("🔄 Tentando com polling...");
+        socket.io.opts.transports = ['polling'];
+        socket.connect();
+      }
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("🔴 Disconnected:", reason);
+      setIsConnected(false);
+      
+      if (reason === "io server disconnect") {
+        socket.connect();
+      }
     });
 
     socket.on("contact-list", (contactListReceived) => {
-      console.log("Contact list received!");
-      setContactList(contactListReceived);
+      console.log("📞 Contact list:", contactListReceived?.length || 0);
+      setContactList(contactListReceived || []);
     });
 
     socket.on("chat-list", (chatListReceived) => {
-      console.log("Chat list received!");
-      setChatList(chatListReceived);
+      console.log("💬 Chat list:", chatListReceived?.length || 0);
+      setChatList(chatListReceived || []);
     });
 
     socket.on("new-message", (newMessage) => {
-      console.log("Nova mensagem recebida:", newMessage);
+      console.log("📨 Nova mensagem:", newMessage?.from);
+
+      if (!newMessage) return;
 
       setChatList((prevChatList) => {
         const index = prevChatList.findIndex(
-          (chat) => chat.id._serialized === newMessage.chatId,
+          (chat) => chat.id?._serialized === newMessage.chatId,
         );
 
         if (index === -1) return prevChatList;
@@ -78,8 +102,8 @@ function App() {
         updatedList[index] = {
           ...updatedList[index],
           lastMessage: newMessage,
-          timestamp: newMessage.timestamp,
-          unreadCount: updatedList[index].unreadCount + 1,
+          timestamp: newMessage.timestamp || Date.now(),
+          unreadCount: (updatedList[index].unreadCount || 0) + 1,
         };
 
         const [movedChat] = updatedList.splice(index, 1);
@@ -91,11 +115,14 @@ function App() {
 
     return () => {
       socket.off("connect");
+      socket.off("connect_error");
       socket.off("disconnect");
       socket.off("contact-list");
       socket.off("chat-list");
       socket.off("new-message");
-      socket.disconnect();
+      if (socket.connected) {
+        socket.disconnect();
+      }
     };
   }, []);
 
@@ -110,6 +137,7 @@ function App() {
         viewerOpen,
         setViewerOpen,
         setCurrentMedia,
+        isConnected,
       }}
     >
       <Container></Container>

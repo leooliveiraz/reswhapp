@@ -16,12 +16,35 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "*", // URL do seu React (Vite)
-        methods: ["GET", "POST"]
-    }
+        origin: "*",
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    path: '/socket.io',
+    transports: ['websocket', 'polling']
 });
 app.use(express.static('public'));
 app.use('/images', express.static(path.join(__dirname, 'downloads')));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        service: 'WhatsApp API',
+        clientReady: !!clientInfo.number
+    });
+});
+
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        clientInfo: clientInfo,
+        connections: io.engine.clientsCount
+    });
+});
 
 const MessageProcessor = require('./services/messageProcessor.js');
 const processor = new MessageProcessor('./messages/');
@@ -35,10 +58,9 @@ const client = new Client({
     puppeteer: {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        protocolTimeout: CHROMIUM_TIMEOUT  // Aumenta o timeout para 120 segundos (o padrão é 30s)
+        protocolTimeout: CHROMIUM_TIMEOUT
     }
 });
-
 
 let clientInfo = {};
 let messageList = {};
@@ -61,7 +83,6 @@ async function processMessage(msg) {
     console.log("5️⃣ Finalizado emissão");
 }
 
-
 async function processMessageList() {
     if (isProcessingMessages) {
         return;
@@ -70,7 +91,7 @@ async function processMessageList() {
         isProcessingMessages = true;
         const keys = Object.keys(messageList);
         for (const key of keys) {
-            console.log("processing ", key)
+            console.log("processing ", key);
             try {
                 await processMessage(messageList[key]);
                 delete messageList[key];
@@ -79,17 +100,15 @@ async function processMessageList() {
                     console.log('✅ É um MongoServerError');
                     delete messageList[key];
                 } else {
-                    console.error("Error on message processment:", error)
+                    console.error("Error on message processment:", error);
                 }
             }
         }
-
     } catch (error2) {
-        console.error("Error on message processment:", error2)
+        console.error("Error on message processment:", error2);
     } finally {
         isProcessingMessages = false;
     }
-
 }
 
 function addOnMessageProcessList(message) {
@@ -101,25 +120,26 @@ client.on('ready', () => {
         name: client.info.pushname,
         number: client.info.wid.user,
         id: client.info.wid._serialized
-    }
+    };
     console.log(`Whatsapp Client is ready!\n${new Date()}\n${JSON.stringify(clientInfo)} `);
+    
     server.listen(PORT, () => {
         console.log(`🚀 WebSocket server running in http://localhost:${PORT}`);
     });
+    
     getChatList(client).then(chatList => {
-        saveLastChatMessageMass(chatList, clientInfo.number).then(() => { })
-    })
+        saveLastChatMessageMass(chatList, clientInfo.number).then(() => { });
+    });
 
     setInterval(() => {
         processMessageList().then(() => { });
-    }, [10 * 1000]);
+    }, 10 * 1000);
 
     setInterval(() => {
         getChatList(client).then(chatList => {
-            saveLastChatMessageMass(chatList, clientInfo.number).then(() => { })
-        })
-    }, [5 * 60 * 1000]);
-
+            saveLastChatMessageMass(chatList, clientInfo.number).then(() => { });
+        });
+    }, 5 * 60 * 1000);
 });
 
 client.on('qr', qr => {
@@ -132,7 +152,7 @@ client.on('qr', qr => {
 
 client.on('message_create', async m => {
     try {
-        const msgData = await extractMessageData(m, true)
+        const msgData = await extractMessageData(m, true);
         if (!msgData) return;
         addOnMessageProcessList(msgData);
         processMessageList().then(() => { });
@@ -141,9 +161,7 @@ client.on('message_create', async m => {
     }
 });
 
-
 client.initialize();
-
 
 io.on('connection', (socket) => {
     console.log(`🟢 Client connected: ${socket.id}`);
@@ -157,10 +175,9 @@ io.on('connection', (socket) => {
     socket.on("get-contact-list", () => {
         console.log('Get contacts:');
         getContactList(client).then(contactList => {
-            me
-            socket.emit("contact-list", contactList)
-        }).catch(error => console.log(error.message))
-    })
+            socket.emit("contact-list", contactList);
+        }).catch(error => console.log(error.message));
+    });
 
     //deprecated
     socket.on('get-last-messages', async (data) => {
@@ -178,8 +195,15 @@ io.on('connection', (socket) => {
         try {
             if (typeof getLastMessages === 'function') {
                 getLastMessages(client, contactId, limit).then(result => {
-                    result.messages.forEach(msg => addOnMessageProcessList(msg))
-                    console.log("messages has been updated!")
+                    result.messages.forEach(msg => addOnMessageProcessList(msg));
+                    console.log("messages has been updated!");
+                    socket.emit('last-messages', result);
+                }).catch(error => {
+                    console.error('❌ Error in getLastMessages:', error);
+                    socket.emit('last-messages', {
+                        success: false,
+                        error: error.message
+                    });
                 });
             } else {
                 console.error('❌ getLastMessages is not a function');
@@ -214,14 +238,14 @@ io.on('connection', (socket) => {
                 const result = await getMessageFromContact(clientInfo, contactId, limit);
                 socket.emit('last-messages', result);
             } else {
-                console.error('❌ getLastMessages is not a function');
+                console.error('❌ getMessageFromContact is not a function');
                 socket.emit('last-messages', {
                     success: false,
-                    error: 'getLastMessages function not available'
+                    error: 'getMessageFromContact function not available'
                 });
             }
         } catch (error) {
-            console.error('❌ Error getting last messages:', error);
+            console.error('❌ Error getting message historic:', error);
             socket.emit('last-messages', {
                 success: false,
                 error: error.message
@@ -232,8 +256,8 @@ io.on('connection', (socket) => {
     socket.on("get-chat-list", () => {
         console.log('get-chat-list');
         getChatList(client).then(chatList => {
-            saveLastChatMessageMass(chatList, clientInfo.number).then(() => { })
-            socket.emit("chat-list", chatList)
-        }).catch(error => console.error("error", error.message))
-    })
+            saveLastChatMessageMass(chatList, clientInfo.number).then(() => { });
+            socket.emit("chat-list", chatList);
+        }).catch(error => console.error("error", error.message));
+    });
 });
