@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import "./ImageViewer.css";
 
-const IMAGE_URL = import.meta.env.VITE_IMAGE_URL || 'http://localhost:3000/images';
+const IMAGE_URL = import.meta.env.VITE_IMAGE_URL;
 
 export default function ImageViewer({ 
   isOpen, 

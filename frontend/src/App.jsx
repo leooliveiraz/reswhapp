@@ -5,9 +5,10 @@ import { AppContext } from "./AppContext";
 import Container from "./components/Container";
 import ImageViewer from "./components/ImageViewer";
 
-const WS_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+const WS_URL = import.meta.env.VITE_SOCKET_URL;
 const IMAGE_URL = import.meta.env.VITE_IMAGE_URL;
 
+console.log(WS_URL,IMAGE_URL)
 function App() {
   const socketRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -34,7 +35,7 @@ function App() {
   }, [currentMedia]);
 
   useEffect(() => {
-    const socketUrl = WS_URL || window.location.origin;
+    const socketUrl = WS_URL ;
     socketRef.current = io(socketUrl, {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
