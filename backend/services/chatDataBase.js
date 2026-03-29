@@ -1,17 +1,17 @@
 require("dotenv").config();
-const { WhatsAppClient } = require('./whatsappClient');
-const mongoose = require("mongoose");
+const mongoConnection = require('./mongoConnection');
 let isUniqueMessagesIndexCreate = false;
 const LAST_CHAT_MESSAGE = "last-chat-message"
 
 async function saveLastChatMessageMass(chatList, clientNumber) {
+    const conn = await mongoConnection.getConnection(clientNumber);
+    const db = conn.db;
+    const collection = db.collection(LAST_CHAT_MESSAGE);
+    
     chatParsedList = []
     for (const chat of chatList) {
         let newMessage = null;
         if (chat.lastMessage) {
-            // Cria instância temporária ou usa cliente existente para extrair dados
-            // Nota: extractMessageData precisa de uma instância do cliente WhatsApp
-            // Para esta função, vamos extrair os dados diretamente sem usar o método completo
             try {
                 newMessage = await extractMessageDataFromChat(chat.lastMessage, false);
             } catch (e) {
@@ -21,9 +21,6 @@ async function saveLastChatMessageMass(chatList, clientNumber) {
         chatParsedList.push({ timestamp: chat.timestamp, chatId: chat.id._serialized, message: newMessage, name: newMessage ? newMessage.contactName : chat.name });
     }
 
-    await mongoose.connect(process.env.MONGO_URI + "_" + clientNumber);
-    const db = mongoose.connection.db;
-    const collection = db.collection(LAST_CHAT_MESSAGE);
     if (!isUniqueMessagesIndexCreate) {
         try {
             await collection.createIndex({ chatId: 1 }, { unique: true, name: "chat_id_unique" });
@@ -34,12 +31,18 @@ async function saveLastChatMessageMass(chatList, clientNumber) {
     }
     try {
         for (const chat of chatParsedList) {
-            await collection.updateOne({ chatId: chat.chatId }, { $set: chat }, { upsert: true });
+            // Remove _id se existir
+            const chatToUpdate = { ...chat };
+            if (chatToUpdate._id) {
+                delete chatToUpdate._id;
+            }
+            if (chatToUpdate.message?._id) {
+                delete chatToUpdate.message._id;
+            }
+            await collection.updateOne({ chatId: chat.chatId }, { $set: chatToUpdate });
         }
     } catch (e) {
         console.log("Erro ao atualizar lastchat", e)
-    } finally {
-        await mongoose.disconnect();
     }
 }
 
@@ -81,8 +84,8 @@ async function extractMessageDataFromChat(message, realizeDownload = false) {
 
 async function getChatListDB(clientInfo, limit = 500) {
     try {
-        await mongoose.connect(process.env.MONGO_URI + "_" + clientInfo.number);
-        const db = mongoose.connection.db;
+        const conn = await mongoConnection.getConnection(clientInfo.number);
+        const db = conn.db;
         const collection = db.collection(LAST_CHAT_MESSAGE);
         const messageList = await collection
             .find({})
@@ -91,13 +94,13 @@ async function getChatListDB(clientInfo, limit = 500) {
             .toArray();
         return {
             success: true,
-            contactId: contactId,
+            contactId: clientInfo.contactId || clientInfo.number,
             contactName: null,
             unreadCount: 0,
             messages: messageList,
             total: messageList.length,
         };
-        
+
     } catch (error) {
         console.error(error);
         return  {

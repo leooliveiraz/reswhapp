@@ -1,11 +1,12 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
+const mongoConnection = require("./mongoConnection");
 const collectionUniqueIndexCreate = {};
 let isUniqueMessagesIndexCreate = false;
 
 async function getMessageFromContact(clientInfo, contactId, limit = 50) {
-    await mongoose.connect(process.env.MONGO_URI + "_" + clientInfo.number);
-    const db = mongoose.connection.db;
+    const conn = await mongoConnection.getConnection(clientInfo.number);
+    const db = conn.db;
     const collection = db.collection(contactId);
     const messageList = await collection
         .find({})
@@ -24,40 +25,69 @@ async function getMessageFromContact(clientInfo, contactId, limit = 50) {
 }
 
 async function saveMessage(msg, clientNumber) {
-    try {
-        await mongoose.connect(process.env.MONGO_URI + "_" + clientNumber);
-        const db = mongoose.connection.db;
-        const collection = db.collection(msg.chatId);
-        if (!collectionUniqueIndexCreate[msg.chatId]) {
+    const conn = await mongoConnection.getConnection(clientNumber);
+    const db = conn.db;
+    const collection = db.collection(msg.chatId);
+    
+    if (!collectionUniqueIndexCreate[msg.chatId]) {
+        try {
             await collection.createIndex({ id: 1 }, { unique: true, name: "message_id_unique" });
             collectionUniqueIndexCreate[msg.chatId] = true;
+        } catch (e) {
+            // Índice pode já existir, ignora
         }
+    }
 
-        await collection.insertOne(msg);
+    // Remove _id se existir (MongoDB não permite atualizar campo _id)
+    const msgToSave = { ...msg };
+    if (msgToSave._id) {
+        delete msgToSave._id;
+    }
+
+    try {
+        await collection.insertOne(msgToSave);
     } catch (e) {
-        throw e;
-    } finally {
-        await mongoose.disconnect();
+        if (e.code !== 11000) { // Ignora erro de duplicate key
+            throw e;
+        }
+        // Mensagem já existe, atualiza (sem modificar _id)
+        await collection.updateOne({ id: msg.id }, { $set: msgToSave });
     }
 }
 
 async function saveLastChatMessage(msg, clientNumber) {
-    try {
-        const lastMsg = { chatId: msg.chatId, message: msg, timestamp: msg.timestamp,name: msg.contactName }
-        await mongoose.connect(process.env.MONGO_URI + "_" + clientNumber);
-        const db = mongoose.connection.db;
-        const collection = db.collection("last-chat-message");
-        if (!isUniqueMessagesIndexCreate) {
-
+    const conn = await mongoConnection.getConnection(clientNumber);
+    const db = conn.db;
+    const collection = db.collection("last-chat-message");
+    
+    if (!isUniqueMessagesIndexCreate) {
+        try {
             await collection.createIndex({ chatId: 1 }, { unique: true, name: "chat_id_unique" });
             isUniqueMessagesIndexCreate = true;
+        } catch (e) {
+            // Índice pode já existir, ignora
         }
-        await collection.updateOne({ chatId: msg.chatId }, { $set: lastMsg }, { upsert: true });
-    } catch (e) {
-        throw e;
-    } finally {
-        await mongoose.disconnect();
     }
+    
+    // Remove _id se existir (MongoDB não permite atualizar campo _id)
+    const msgClean = { ...msg };
+    if (msgClean._id) {
+        delete msgClean._id;
+    }
+    
+    const lastMsg = { 
+        chatId: msg.chatId, 
+        message: msgClean, 
+        timestamp: msg.timestamp,
+        name: msg.contactName 
+    };
+    
+    // Remove _id do lastMsg também
+    if (lastMsg._id) {
+        delete lastMsg._id;
+    }
+    
+    await collection.updateOne({ chatId: msg.chatId }, { $set: lastMsg });
 }
 
 module.exports = { getMessageFromContact, saveMessage, saveLastChatMessage };

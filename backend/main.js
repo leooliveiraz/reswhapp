@@ -7,6 +7,9 @@ const { Server } = require('socket.io');
 const path = require('path');
 require('dotenv').config();
 
+const healthRoutes = require('./routes/healthRoutes');
+const socketRoutes = require('./routes/socketRoutes');
+
 // server config
 const PORT = 3000;
 const app = express();
@@ -23,26 +26,6 @@ const io = new Server(server, {
 app.use(express.static('public'));
 app.use('/images', express.static(path.join(__dirname, 'downloads')));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        service: 'WhatsApp API',
-        clientReady: whatsappClient.isClientReady()
-    });
-});
-
-app.get('/api/health', (req, res) => {
-    res.status(200).json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        clientInfo: whatsappClient.getClientInfo(),
-        connections: io.engine.clientsCount
-    });
-});
-
 const MessageProcessor = require('./services/messageProcessor.js');
 const processor = new MessageProcessor('./messages/');
 
@@ -50,10 +33,13 @@ const processor = new MessageProcessor('./messages/');
 const whatsappClient = new WhatsAppClient({
     chromeTimeout: 60 * 1000,
     chromiumDataPath: process.env.CHROMIUM_DATA,
-    
+
     // Callback quando o cliente está pronto
     onReady: (clientInfo) => {
         console.log(`Whatsapp Client is ready!\n${new Date()}\n${JSON.stringify(clientInfo)} `);
+
+        // Health check routes
+        healthRoutes(app, whatsappClient, io);
 
         server.listen(PORT, () => {
             console.log(`🚀 WebSocket server running in http://localhost:${PORT}`);
@@ -75,7 +61,7 @@ const whatsappClient = new WhatsAppClient({
             });
         }, 5 * 60 * 1000);
     },
-    
+
     // Callback para QR Code (usa terminal por padrão)
     onQRCode: (qr) => {
         try {
@@ -85,7 +71,7 @@ const whatsappClient = new WhatsAppClient({
             console.error("Error on generate qrcode");
         }
     },
-    
+
     // Callback para novas mensagens
     onMessage: async (msg) => {
         await saveMessage(msg, whatsappClient.getClientInfo().number);
@@ -108,96 +94,5 @@ const whatsappClient = new WhatsAppClient({
 // Inicializa o cliente WhatsApp
 whatsappClient.initialize();
 
-io.on('connection', (socket) => {
-    console.log(`🟢 Client connected: ${socket.id}`);
-    console.log(`📊 Total connections: ${io.engine.clientsCount}`);
-
-    socket.on('disconnect', () => {
-        console.log(`🔴 Client disconnected: ${socket.id}`);
-        console.log(`📊 Total connections: ${io.engine.clientsCount}`);
-    });
-
-    socket.on("get-contact-list", () => {
-        console.log('Get contacts:');
-        whatsappClient.getContactList().then(contactList => {
-            socket.emit("contact-list", contactList);
-        }).catch(error => console.log(error.message));
-    });
-
-    //deprecated
-    socket.on('get-last-messages', async (data) => {
-        console.log('📨 Get last messages request:', data);
-        const { contactId, limit = Infinity } = data;
-
-        if (!contactId) {
-            socket.emit('last-messages', {
-                success: false,
-                error: 'contactId is required'
-            });
-            return;
-        }
-
-        try {
-            whatsappClient.getLastMessages(contactId, limit).then(result => {
-                result.messages.forEach(msg => {
-                    // Adiciona à fila de processamento do cliente WhatsApp
-                    whatsappClient._addToMessageQueue(msg);
-                });
-                console.log("messages has been updated!");
-                socket.emit('last-messages', result);
-            }).catch(error => {
-                console.error('❌ Error in getLastMessages:', error);
-                socket.emit('last-messages', {
-                    success: false,
-                    error: error.message
-                });
-            });
-        } catch (error) {
-            console.error('❌ Error getting last messages:', error);
-            socket.emit('last-messages', {
-                success: false,
-                error: error.message
-            });
-        }
-    });
-
-    socket.on('get-message-historic', async (data) => {
-        console.log('📨 Get message historic request:', data);
-        const { contactId, limit = 50 } = data;
-
-        if (!contactId) {
-            socket.emit('last-messages', {
-                success: false,
-                error: 'contactId is required'
-            });
-            return;
-        }
-
-        try {
-            if (typeof getMessageFromContact === 'function') {
-                const result = await getMessageFromContact(whatsappClient.getClientInfo(), contactId, limit);
-                socket.emit('last-messages', result);
-            } else {
-                console.error('❌ getMessageFromContact is not a function');
-                socket.emit('last-messages', {
-                    success: false,
-                    error: 'getMessageFromContact function not available'
-                });
-            }
-        } catch (error) {
-            console.error('❌ Error getting message historic:', error);
-            socket.emit('last-messages', {
-                success: false,
-                error: error.message
-            });
-        }
-    });
-
-    socket.on("get-chat-list", () => {
-        console.log('get-chat-list');
-        whatsappClient.getChatList().then(chatList => {
-            saveLastChatMessageMass(chatList, whatsappClient.getClientInfo().number).then(() => { });
-            socket.emit("chat-list", chatList);
-        }).catch(error => console.error("error", error.message));
-    });
-});
+// Socket.io routes
+socketRoutes(io, whatsappClient, getMessageFromContact, saveLastChatMessageMass);
