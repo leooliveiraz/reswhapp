@@ -2,6 +2,24 @@
   padding: 15px;
   background-color: #202c33;
   border-bottom: 1px solid #2a3942;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.back-button {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  color: #8696a0;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.back-button:hover {
+  background-color: #374248;
 }
 
 .contact-info h3 {
@@ -13,4 +31,11 @@
 .contact-info span {
   color: #8696a0;
   font-size: 13px;
+}
+
+/* Mostrar botão de voltar apenas em mobile */
+@media (max-width: 768px) {
+  .back-button {
+    display: block;
+  }
 }

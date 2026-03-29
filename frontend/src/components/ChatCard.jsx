@@ -2,7 +2,7 @@ import React, { useContext } from "react";
 import { AppContext } from "../AppContext";
 import "./ChatCard.css";
 
-export default function ChatCard({ chatData }) {
+export default function ChatCard({ chatData, onClick }) {
   const { setSelectedContact, chatList, setChatList } = useContext(AppContext);
 
   const contactName = chatData.name || "Desconhecido";
@@ -13,7 +13,7 @@ export default function ChatCard({ chatData }) {
     if (!timestamp) return "";
     const date = new Date(timestamp * 1000);
     const now = new Date();
-    
+
     if (date.toDateString() === now.toDateString()) {
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
@@ -31,7 +31,7 @@ export default function ChatCard({ chatData }) {
 
   const getMessagePreview = () => {
     if (!lastMessage) return "Nenhuma mensagem";
-    
+
     switch(lastMessage.type) {
       case "image": return "📸 Foto";
       case "document": return "📎 Documento";
@@ -43,31 +43,30 @@ export default function ChatCard({ chatData }) {
   };
 
   const handleClick = () => {
-    // 1. Seleciona o contato
-    setSelectedContact(chatData);
-    
-    // 2. Zera o contador de mensagens não lidas
-    setChatList(prevChatList => 
-      prevChatList.map(chat => 
-        chat.id._serialized === chatData.id._serialized 
-          ? { ...chat, unreadCount: 0 } 
-          : chat
-      )
-    );
-
-    // 3. Opcional: avisar o servidor que as mensagens foram lidas
-    // socket.emit("mark-as-read", chatData.id._serialized);
+    if (onClick) {
+      onClick(chatData);
+    } else {
+      // Fallback para comportamento padrão
+      setSelectedContact(chatData);
+      setChatList(prevChatList =>
+        prevChatList.map(chat =>
+          chat.id._serialized === chatData.id._serialized
+            ? { ...chat, unreadCount: 0 }
+            : chat
+        )
+      );
+    }
   };
 
   return (
-    <div 
+    <div
       className={`chat-card ${isSelected ? 'selected' : ''}`}
       onClick={handleClick}
     >
       <div className="chat-card-avatar">
         {contactName.charAt(0)}
       </div>
-      
+
       <div className="chat-card-info">
         <div className="chat-card-header">
           <span className="chat-card-name">
@@ -77,7 +76,7 @@ export default function ChatCard({ chatData }) {
             {formatTime(lastMessage?.timestamp)}
           </span>
         </div>
-        
+
         <div className="chat-card-message">
           <span className={`message-preview ${chatData.unreadCount > 0 ? 'unread' : ''}`}>
             {getMessagePreview()}
