@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { extractMessageData } = require('./whatsappService');
+const { WhatsAppClient } = require('./whatsappClient');
 const mongoose = require("mongoose");
 let isUniqueMessagesIndexCreate = false;
 const LAST_CHAT_MESSAGE = "last-chat-message"
@@ -9,7 +9,14 @@ async function saveLastChatMessageMass(chatList, clientNumber) {
     for (const chat of chatList) {
         let newMessage = null;
         if (chat.lastMessage) {
-            newMessage = await extractMessageData(chat.lastMessage, false)
+            // Cria instância temporária ou usa cliente existente para extrair dados
+            // Nota: extractMessageData precisa de uma instância do cliente WhatsApp
+            // Para esta função, vamos extrair os dados diretamente sem usar o método completo
+            try {
+                newMessage = await extractMessageDataFromChat(chat.lastMessage, false);
+            } catch (e) {
+                console.error("Erro ao extrair dados da mensagem:", e);
+            }
         }
         chatParsedList.push({ timestamp: chat.timestamp, chatId: chat.id._serialized, message: newMessage, name: newMessage ? newMessage.contactName : chat.name });
     }
@@ -34,6 +41,41 @@ async function saveLastChatMessageMass(chatList, clientNumber) {
     } finally {
         await mongoose.disconnect();
     }
+}
+
+/**
+ * Extrai dados básicos de uma mensagem do chat (versão simplificada)
+ * Não requer instância do cliente WhatsApp
+ */
+async function extractMessageDataFromChat(message, realizeDownload = false) {
+    if (!message) return null;
+    
+    // Nota: esta é uma versão simplificada que não baixa mídia
+    // e não acessa métodos completos do cliente WhatsApp
+    const msgData = {
+        id: message.id?._serialized,
+        timestamp: message.timestamp,
+        dateTime: message.timestamp ? new Date(message.timestamp * 1000).toLocaleString() : null,
+        type: message.type,
+        body: message.body,
+        from: message.from,
+        to: message.to,
+        isForwarded: message.isForwarded,
+        hasMedia: message.hasMedia,
+        // Dados do chat
+        chatId: message.chatId?._serialized || message.from,
+    };
+    
+    // Tenta extrair nome do contato se disponível
+    try {
+        if (message.contact) {
+            msgData.contactName = message.contact.pushname || message.contact.name || message.contact.number || 'Unknown';
+        }
+    } catch (e) {
+        msgData.contactName = 'Unknown';
+    }
+    
+    return msgData;
 }
 
 
