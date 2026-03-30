@@ -1,6 +1,15 @@
 // src/components/Message.jsx
-import React, { useContext, useState } from "react";
+import React, { useContext } from "react";
 import ImageViewer from "./ImageViewer";
+import DocumentMessage from "./DocumentMessage";
+import LocationMessage from "./LocationMessage";
+import VCardMessage from "./VCardMessage";
+import ReactionMessage from "./ReactionMessage";
+import PollMessage from "./PollMessage";
+import LinkPreviewMessage from "./LinkPreviewMessage";
+import GroupNotificationMessage from "./GroupNotificationMessage";
+import UnknownMessage from "./UnknownMessage";
+import QuotedMessage from "./QuotedMessage";
 import "./Message.css";
 import { AppContext } from "../AppContext";
 
@@ -10,8 +19,6 @@ export default function Message({ msg, contactName, isOwn, allMessages }) {
   const { setViewerOpen, setCurrentMedia } = useContext(AppContext);
 
   const nome = isOwn ? "Você" : msg.contactName;
-
-  // Filtra apenas mensagens com mídia do mesmo contato
 
   const dataHora = msg.timestamp
     ? new Date(msg.timestamp * 1000).toLocaleString([], {
@@ -38,8 +45,39 @@ export default function Message({ msg, contactName, isOwn, allMessages }) {
   };
 
   const handleMediaClick = (msg) => {
-    setCurrentMedia(msg),
-    setViewerOpen(true)
+    setCurrentMedia(msg);
+    setViewerOpen(true);
+  };
+
+  // Mensagem respondida (quoted message)
+  const quotedMsg = msg.quotedMsg || msg.quotedMessage || msg.reply || null;
+
+  // Tipos não suportados - fallback
+  const unsupportedTypes = ["order", "payment", "unknown"];
+  if (unsupportedTypes.includes(msg.type)) {
+    return (
+      <div className="message-system">
+        <UnknownMessage msg={msg} />
+      </div>
+    );
+  }
+
+  // Notificações de grupo e sistema
+  if (msg.type === "group_notification") {
+    return (
+      <div className="message-system">
+        <GroupNotificationMessage msg={msg} />
+      </div>
+    );
+  }
+
+  // Reações
+  if (msg.type === "reaction") {
+    return (
+      <div className="message-reaction-wrapper">
+        <ReactionMessage msg={msg} allMessages={allMessages} />
+      </div>
+    );
   }
 
   return (
@@ -47,8 +85,20 @@ export default function Message({ msg, contactName, isOwn, allMessages }) {
       <div className={`message ${isOwn ? "own" : "other"}`}>
         {!isOwn && <div className="message-sender">{nome}</div>}
         <div className="message-bubble">
+          {/* Mensagem respondida */}
+          {quotedMsg && (
+            <QuotedMessage quotedMsg={quotedMsg} isOwn={isOwn} />
+          )}
+          {(
+            console.log(msg)
+          )}
+
+          {/* Imagem */}
           {msg.hasMedia && msg.type === "image" && (
-            <div className="message-image" onClick={() => handleMediaClick(msg)}>
+            <div
+              className="message-image"
+              onClick={() => handleMediaClick(msg)}
+            >
               <img
                 src={getImageUrl()}
                 alt="Imagem"
@@ -56,6 +106,8 @@ export default function Message({ msg, contactName, isOwn, allMessages }) {
               />
             </div>
           )}
+
+          {/* Sticker */}
           {msg.hasMedia && msg.type === "sticker" && (
             <div className="message-sticker">
               <img
@@ -65,8 +117,13 @@ export default function Message({ msg, contactName, isOwn, allMessages }) {
               />
             </div>
           )}
+
+          {/* Vídeo */}
           {msg.hasMedia && msg.type === "video" && (
-            <div className="message-image" onClick={() => handleMediaClick(msg)}>
+            <div
+              className="message-image"
+              onClick={() => handleMediaClick(msg)}
+            >
               <video
                 preload="metadata"
                 src={getImageUrl()}
@@ -74,16 +131,44 @@ export default function Message({ msg, contactName, isOwn, allMessages }) {
               />
             </div>
           )}
+
+          {/* Áudio (ptt) */}
           {msg.hasMedia && msg.type === "ptt" && (
             <div className="message-image">
               <audio preload="metadata" controls src={getImageUrl()} />
             </div>
           )}
 
+          {/* Documento */}
+          {msg.hasMedia && msg.type === "document" && (
+            <DocumentMessage msg={msg} isOwn={isOwn} />
+          )}
+
+          {/* Localização */}
+          {msg.type === "location" && <LocationMessage msg={msg} />}
+
+          {/* Contato (vCard) */}
+          {(msg.type === "vcard" || msg.type === "contact_card") && (
+            <VCardMessage msg={msg} />
+          )}
+
+          {/* Enquete/Poll */}
+          {msg.type === "poll" && <PollMessage msg={msg} isOwn={isOwn} />}
+
+          {/* Preview de Link */}
+          {(msg.type === "link" || msg.url || msg.linkPreview) && (
+            <LinkPreviewMessage msg={msg} />
+          )}
+
+          {/* Mensagem privada criptografada */}
           {msg.type === "e2e_notification" && (
             <div className="message-text">🔒 Mensagem privada 🔒</div>
           )}
-          <div className="message-text">{mensagem}</div>
+
+          {/* Texto da mensagem */}
+          {mensagem && <div className="message-text">{mensagem}</div>}
+
+          {/* Horário */}
           <div className="message-time">{dataHora}</div>
         </div>
       </div>

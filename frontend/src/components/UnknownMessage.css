@@ -1,0 +1,35 @@
+.message-unknown {
+  margin: 4px 0;
+}
+
+.unknown-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+}
+
+.unknown-icon {
+  font-size: 24px;
+}
+
+.unknown-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.unknown-type {
+  font-size: 12px;
+  color: #667781;
+  font-family: monospace;
+}
+
+.unknown-body {
+  font-size: 13px;
+  color: #8696a0;
+  word-wrap: break-word;
+}

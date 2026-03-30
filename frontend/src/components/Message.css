@@ -52,11 +52,11 @@
     text-align: right;
 }
 
-.message-image img,video {
+.message-image img,
+video {
     max-width: 200px;
     max-height: 400px;
 }
-
 
 .message-sticker img {
     max-width: 100px;
@@ -68,17 +68,46 @@
     max-height: 100px;
 }
 
-/* Adicione ao seu Message.css */
 .clickable-media {
-  cursor: pointer;
-  transition: transform 0.2s;
+    cursor: pointer;
+    transition: transform 0.2s;
 }
 
 .clickable-media:hover {
-  transform: scale(1.02);
-  opacity: 0.9;
+    transform: scale(1.02);
+    opacity: 0.9;
 }
 
-.message-image, .message-sticker {
-  cursor: pointer;
+.message-image,
+.message-sticker {
+    cursor: pointer;
+}
+
+/* Mensagens de sistema (grupo, notificações) */
+.message-system {
+    display: flex;
+    justify-content: center;
+    margin: 8px 0;
+}
+
+/* Wrapper para reações */
+.message-reaction-wrapper {
+    display: flex;
+    justify-content: center;
+    margin: 4px 0;
+}
+
+/* Mensagens desconhecidas */
+.message-unknown {
+    margin-bottom: 12px;
+    max-width: 80%;
+    clear: both;
+}
+
+.message-unknown .message-bubble {
+    padding: 8px 12px;
+    border-radius: 12px;
+    background-color: #2a3942;
+    color: #e9edef;
+    border: 1px dashed #667781;
 }
