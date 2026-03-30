@@ -113,4 +113,65 @@ async function saveLastChatMessage(msg, clientNumber) {
     }
 }
 
-module.exports = { getMessageFromContact, saveMessage, saveLastChatMessage };
+/**
+ * Atualiza o status ack de uma mensagem
+ * @param {string} clientNumber - Número do cliente
+ * @param {string} messageId - ID da mensagem
+ * @param {number} ack - Novo status ack (0=error, 1=sent, 2=delivered, 3=read, 4=played)
+ * @param {Object} msgData - Dados opcionais da mensagem (para salvar se não existir)
+ */
+async function updateMessageAck(clientNumber, messageId, ack, msgData = null) {
+    try {
+        let i = 0;
+        const conn = await mongoConnection.getConnection(clientNumber);
+        if (!conn) {
+            console.warn(`⚠️ MongoDB não disponível, não foi possível atualizar ack ${messageId}`);
+            return;
+        }
+
+        const db = conn.db;
+
+        const chatId = msgData.chatId;
+        const collection = db.collection(chatId);
+
+        // Mapeia ack para status legível
+        const ackStatusMap = {
+            0: 'ERROR ❌',
+            1: 'SENT ✓',
+            2: 'DELIVERED ✓✓',
+            3: 'READ ✓✓🔵',
+            4: 'PLAYED ✓✓🔵🔊'
+        };
+        const ackStatus = ackStatusMap[ack] || `UNKNOWN (${ack})`;
+
+        // Tenta atualizar primeiro
+        const result = await collection.updateOne(
+            { id: messageId },
+            { $set: { ack: ack } }
+        );
+
+        // Se não encontrou a mensagem e temos dados, salva a mensagem
+        if (result.matchedCount === 0 && msgData) {
+            console.log(`📥 ACK ${ackStatus}: Message ${messageId} not found, saving new`);
+
+            const msgToSave = { ...msgData, ack: ack };
+            if (msgToSave._id) {
+                delete msgToSave._id;
+                console.log('b', i++)
+            }
+
+            await collection.insertOne(msgToSave);
+
+            console.log(`✅ ACK ${ackStatus}: Message saved successfully`);
+        } else if (result.modifiedCount > 0) {
+            console.log(`✅ ACK ${ackStatus}: Message ${messageId.substring(0, 50)}... updated`);
+        } else {
+            console.log(`ℹ️ ACK ${ackStatus}: Message ${messageId.substring(0, 50)}... (no change needed)`);
+        }
+    } catch (error) {
+        console.error(`❌ Error updating message ack ${messageId}:`, error.message);
+        // Não relança o erro para evitar crash
+    }
+}
+
+module.exports = { getMessageFromContact, saveMessage, saveLastChatMessage, updateMessageAck };

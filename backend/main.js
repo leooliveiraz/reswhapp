@@ -103,6 +103,9 @@ const whatsappClient = new WhatsAppClient({
     onReady: (clientInfo) => {
         console.log(`Whatsapp Client is ready!\n${new Date()}\n${JSON.stringify(clientInfo)} `);
 
+        // Configura socket emitter
+        whatsappClient.setSocketEmitter(io);
+
         // Health check routes
         healthRoutes(app, whatsappClient, io);
 
@@ -115,13 +118,6 @@ const whatsappClient = new WhatsAppClient({
         }).catch(error => {
             console.error('Error getting chat list on startup:', error);
         });
-
-        // Processa fila de mensagens a cada 10 segundos
-        setInterval(() => {
-            whatsappClient.processMessageQueue().catch(error => {
-                console.error('Error processing message queue:', error);
-            });
-        }, 10 * 1000);
 
         // Atualiza lista de chats a cada 5 minutos
         setInterval(() => {
@@ -146,20 +142,19 @@ const whatsappClient = new WhatsAppClient({
     // Callback para novas mensagens
     onMessage: async (msg) => {
         try {
-            await saveMessage(msg, whatsappClient.getClientInfo().number);
-            await saveLastChatMessage(msg, whatsappClient.getClientInfo().number);
+            const clientNumber = whatsappClient.getClientInfo().number;
+            
+            // Salva no MongoDB
+            await saveMessage(msg, clientNumber);
+            await saveLastChatMessage(msg, clientNumber);
 
-            console.log("New message", msg.from, msg.body);
-            const sockets = await io.fetchSockets();
-            console.log(`4️⃣ Sockets encontrados: ${sockets.length}`);
+            console.log("✅ New message:", msg.from, msg.body);
+            console.log("📡 Emitting to sockets...");
 
-            sockets.forEach((socket, i) => {
-                console.log(`   Socket ${i}: ${socket.id}`);
-                socket.emit("new-message", msg);
-                console.log(`   ✅ Emitido para socket ${socket.id}`);
-            });
-
-            console.log("5️⃣ Finalizado emissão");
+            // Emite para os sockets
+            whatsappClient._emitToSockets('new-message', msg);
+            
+            console.log("✅ Message emitted");
         } catch (error) {
             console.error('Error processing new message:', error);
         }

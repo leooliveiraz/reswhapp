@@ -51,6 +51,23 @@
     font-size: 11px;
     color: #8696a0;
     text-align: right;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.message-ack {
+    font-size: 13px;
+    color: #8696a0;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+}
+
+.message-ack-read {
+    color: #53bdeb; /* Azul do WhatsApp para mensagens lidas */
 }
 
 .message-image img,

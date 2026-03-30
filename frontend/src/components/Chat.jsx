@@ -153,9 +153,38 @@ export default function Chat() {
 
     socket.on("new-message", handleNewMessage);
 
+    // Listener para ack de mensagens (atualiza status de entrega/leitura)
+    socket.on("message-ack", (ackData) => {
+      if (!selectedContact || ackData.chatId !== selectedContact.id._serialized) return;
+      
+      const ackIcons = {
+        0: '❌ ERROR',
+        1: '✓ SENT',
+        2: '✓✓ DELIVERED',
+        3: '✓✓🔵 READ',
+        4: '✓✓🔵🔊 PLAYED'
+      };
+      
+      console.log(`📨 ACK ${ackIcons[ackData.ack] || ackData.ackStatus}: ${ackData.id.substring(0, 40)}...`);
+      
+      setMessages((prev) => {
+        return prev.map(msg => {
+          if (msg.id === ackData.id) {
+            return {
+              ...msg,
+              ack: ackData.ack,
+              ackStatus: ackData.ackStatus
+            };
+          }
+          return msg;
+        });
+      });
+    });
+
     return () => {
       socket.off("last-messages", handleLastMessages);
       socket.off("new-message", handleNewMessage);
+      socket.off("message-ack");
     };
   }, [selectedContact, socket]);
 

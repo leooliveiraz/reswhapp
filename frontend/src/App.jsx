@@ -102,6 +102,36 @@ function App() {
       });
     });
 
+    // Listener para ack de mensagens (atualiza status de entrega/leitura)
+    socket.on("message-ack", (ackData) => {
+      const ackIcons = {
+        0: '❌ ERROR',
+        1: '✓ SENT',
+        2: '✓✓ DELIVERED',
+        3: '✓✓🔵 READ',
+        4: '✓✓🔵🔊 PLAYED'
+      };
+      
+      console.log(`📨 ACK ${ackIcons[ackData.ack] || ackData.ackStatus}: ${ackData.id.substring(0, 40)}...`);
+
+      // Atualiza o ack na lista de chats
+      setChatList((prevChatList) => {
+        return prevChatList.map((chat) => {
+          if (chat.id?._serialized === ackData.chatId && chat.lastMessage?.id === ackData.id) {
+            return {
+              ...chat,
+              lastMessage: {
+                ...chat.lastMessage,
+                ack: ackData.ack,
+                ackStatus: ackData.ackStatus
+              }
+            };
+          }
+          return chat;
+        });
+      });
+    });
+
     return () => {
       socket.off("connect");
       socket.off("connect_error");
@@ -109,6 +139,7 @@ function App() {
       socket.off("contact-list");
       socket.off("chat-list");
       socket.off("new-message");
+      socket.off("message-ack");
       if (socket.connected) {
         socket.disconnect();
       }

@@ -23,10 +23,6 @@ class WhatsAppClient {
         this.onReadyCallback = options.onReady || null;
         this.onQRCodeCallback = options.onQRCode || null;
         this.onMessageCallback = options.onMessage || null;
-        
-        // Fila de mensagens pendentes
-        this.messageList = {};
-        this.isProcessingMessages = false;
 
         // Controle de reconexão
         this.isReconnecting = false;
@@ -233,10 +229,9 @@ class WhatsAppClient {
                 const msgData = await this.extractMessageData(m, true);
                 if (!msgData) return;
 
-                this._addToMessageQueue(msgData);
-
+                // Salva diretamente no banco via callback
                 if (this.onMessageCallback) {
-                    this.onMessageCallback(msgData);
+                    await this.onMessageCallback(msgData);
                 }
             } catch (error) {
                 console.error("Message creation process error:", error);
@@ -249,7 +244,7 @@ class WhatsAppClient {
                 // Extrai o chatId do msgId (formato: "false::<chatId>::<messageId>")
                 const msgIdSerialized = reaction.msgId?._serialized || reaction.msgId;
                 const chatIdFromMsgId = msgIdSerialized ? msgIdSerialized.split('::')[1] : null;
-                
+
                 // Extrai o ID da mensagem original que foi reagida
                 const originalMsgId = msgIdSerialized ? msgIdSerialized.split('::').slice(2).join('::') : null;
 
@@ -269,63 +264,53 @@ class WhatsAppClient {
                     senderPushname: reaction.senderId?.pushName || null
                 };
 
-                this._addToMessageQueue(reactionData);
-
+                // Salva diretamente no banco via callback
                 if (this.onMessageCallback) {
-                    this.onMessageCallback(reactionData);
+                    await this.onMessageCallback(reactionData);
                 }
             } catch (error) {
                 console.error('Error processing message reaction:', error);
             }
         });
-    }
 
-    /**
-     * Adiciona mensagem à fila de processamento
-     */
-    _addToMessageQueue(message) {
-        this.messageList[message.id] = message;
-    }
+        // Listener para ack de mensagens (enviada, entregue, lida)
+        this.client.on('message_ack', async (message, ack) => {
+            try {
+                const ackStatus = WhatsAppClient._getAckStatus(ack);
+                const messageId = message.id?._serialized || message.id;
 
-    /**
-     * Processa fila de mensagens pendentes
-     */
-    async processMessageQueue() {
-        if (this.isProcessingMessages) {
-            return;
-        }
-        
-        try {
-            this.isProcessingMessages = true;
-            const keys = Object.keys(this.messageList);
-            
-            for (const key of keys) {
-                console.log("processing ", key);
-                try {
-                    await this._processMessage(this.messageList[key]);
-                    delete this.messageList[key];
-                } catch (error) {
-                    if (error.name === 'MongoServerError') {
-                        console.log('✅ É um MongoServerError');
-                        delete this.messageList[key];
-                    } else {
-                        console.error("Error on message processment:", error);
-                    }
-                }
+                console.log(`📨 Received ACK ${ackStatus} - ${ack}: ${messageId.substring(0, 50)}...`);
+
+                const ackData = {
+                    id: messageId,
+                    chatId: message.to,
+                    from: message.from,
+                    fromMe: message.fromMe,
+                    type: 'message_ack',
+                    ack: ack,
+                    ackStatus: ackStatus,
+                    timestamp: message.timestamp || Date.now(),
+                    body: message.body,
+                    type_msg: message.type
+                };
+
+                // Atualiza ack no MongoDB
+                const { updateMessageAck } = require('./messageDataBase');
+                await updateMessageAck(this.clientInfo.number, messageId, ack, {
+                    id: messageId,
+                    chatId: message.to,
+                    from: message.from,
+                    fromMe: message.fromMe,
+                    body: message.body || '',
+                    type: message.type || 'chat',
+                    timestamp: message.timestamp
+                });
+
+                // Emite para os sockets
+            } catch (error) {
+                console.error('❌ Error processing message ack:', error.message);
             }
-        } catch (error2) {
-            console.error("Error on message processment:", error2);
-        } finally {
-            this.isProcessingMessages = false;
-        }
-    }
-
-    /**
-     * Callback padrão para processamento de mensagens
-     */
-    async _processMessage(msg) {
-        // Implementação padrão - pode ser sobrescrita pelo callback onMessage
-        console.log("New message", msg.from, msg.body);
+        });
     }
 
     /**
@@ -558,6 +543,41 @@ class WhatsAppClient {
      */
     getClient() {
         return this.client;
+    }
+
+    /**
+     * Define o emitter para sockets
+     */
+    setSocketEmitter(io) {
+        this.socketEmitter = io;
+    }
+
+    /**
+     * Emite evento para os sockets conectados
+     */
+    _emitToSockets(eventName, data) {
+        if (this.socketEmitter) {
+            console.log(`📡 Emitting ${eventName} to ${this.socketEmitter.sockets?.sockets?.size || 0} sockets`);
+            this.socketEmitter.emit(eventName, data);
+        } else {
+            console.warn('⚠️ socketEmitter not set!');
+        }
+    }
+
+    /**
+     * Retorna o status legível do ack
+     * @param {number} ack - Código do ack
+     * @returns {string} Status legível
+     */
+    static _getAckStatus(ack) {
+        const ackMap = {
+            0: 'ERROR',
+            1: 'SENT',
+            2: 'DELIVERED',
+            3: 'READ',
+            4: 'PLAYED'
+        };
+        return ackMap[ack] || `UNKNOWN_${ack}`;
     }
 }
 

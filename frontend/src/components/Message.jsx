@@ -48,6 +48,20 @@ export default function Message({ msg, contactName, isOwn, allMessages, onQuoted
     setViewerOpen(true);
   };
 
+  // Ícone de ack (status de entrega/leitura) - só mostra para mensagens próprias
+  const getAckIcon = () => {
+    if (!isOwn || msg.ack === undefined) return null;
+    
+    switch (msg.ack) {
+      case 0: return <span className="message-ack" title="Erro no envio">❌</span>;
+      case 1: return <span className="message-ack" title="Enviada">✓</span>;
+      case 2: return <span className="message-ack" title="Entregue">✓✓</span>;
+      case 3: return <span className="message-ack message-ack-read" title="Lida">✓✓</span>;
+      case 4: return <span className="message-ack message-ack-read" title="Reproduzido">✓✓🔊</span>;
+      default: return null;
+    }
+  };
+
   // Mensagem respondida (quoted message)
   const quotedMsg = msg.quotedMsg || msg.quotedMessage || msg.reply || null;
 
@@ -196,8 +210,11 @@ export default function Message({ msg, contactName, isOwn, allMessages, onQuoted
             </div>
           )}
 
-          {/* Horário */}
-          <div className="message-time">{dataHora}</div>
+          {/* Horário e Ack */}
+          <div className="message-time">
+            {dataHora}
+            {getAckIcon()}
+          </div>
         </div>
       </div>
     </>
