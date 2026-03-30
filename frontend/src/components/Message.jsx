@@ -4,7 +4,6 @@ import ImageViewer from "./ImageViewer";
 import DocumentMessage from "./DocumentMessage";
 import LocationMessage from "./LocationMessage";
 import VCardMessage from "./VCardMessage";
-import ReactionMessage from "./ReactionMessage";
 import PollMessage from "./PollMessage";
 import LinkPreviewMessage from "./LinkPreviewMessage";
 import GroupNotificationMessage from "./GroupNotificationMessage";
@@ -71,13 +70,26 @@ export default function Message({ msg, contactName, isOwn, allMessages, onQuoted
     );
   }
 
-  // Reações
+  // Reações - não renderiza como mensagem separada, apenas embutida
+  // (reações são exibidas junto com a mensagem original)
   if (msg.type === "reaction") {
-    return (
-      <div className="message-reaction-wrapper">
-        <ReactionMessage msg={msg} allMessages={allMessages} />
-      </div>
-    );
+    return null;
+  }
+
+  // Agrupa reações por emoji
+  const groupedReactions = {};
+  if (msg.reactions && msg.reactions.length > 0) {
+    msg.reactions.forEach(reaction => {
+      const emoji = reaction.reaction || reaction.body || '';
+      if (!groupedReactions[emoji]) {
+        groupedReactions[emoji] = [];
+      }
+      // Evita duplicatas pelo ID da reação
+      const exists = groupedReactions[emoji].find(r => r.id === reaction.id);
+      if (!exists) {
+        groupedReactions[emoji].push(reaction);
+      }
+    });
   }
 
   return (
@@ -164,6 +176,25 @@ export default function Message({ msg, contactName, isOwn, allMessages, onQuoted
 
           {/* Texto da mensagem */}
           {mensagem && <div className="message-text">{mensagem}</div>}
+
+          {/* Reações */}
+          {Object.keys(groupedReactions).length > 0 && (
+            <div className="message-reactions-container">
+              {Object.entries(groupedReactions).map(([emoji, reactions]) => {
+                const isOwnReaction = reactions.some(r => r.fromMe);
+                return (
+                  <div 
+                    key={emoji} 
+                    className={`message-reaction-badge ${isOwnReaction ? 'own' : ''}`}
+                    title={reactions.map(r => r.senderPushname || r.from).join(', ')}
+                  >
+                    <span className="reaction-emoji">{emoji}</span>
+                    <span className="reaction-count">{reactions.length}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Horário */}
           <div className="message-time">{dataHora}</div>

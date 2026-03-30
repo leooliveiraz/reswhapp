@@ -12,12 +12,22 @@ function socketRoutes(io, whatsappClient, getMessageFromContact, saveLastChatMes
             console.log(`📊 Total connections: ${io.engine.clientsCount}`);
         });
 
+        // Handler de erro genérico para sockets
+        socket.on('error', (error) => {
+            console.error(`❌ Socket error for ${socket.id}:`, error);
+        });
+
         // Obter lista de contatos
         socket.on('get-contact-list', () => {
             console.log('Get contacts:');
-            whatsappClient.getContactList().then(contactList => {
-                socket.emit('contact-list', contactList);
-            }).catch(error => console.log(error.message));
+            whatsappClient.getContactList()
+                .then(contactList => {
+                    socket.emit('contact-list', contactList);
+                })
+                .catch(error => {
+                    console.error('❌ Error getting contact list:', error);
+                    socket.emit('contact-list', []);
+                });
         });
 
         // Obter últimas mensagens (deprecated)
@@ -34,19 +44,21 @@ function socketRoutes(io, whatsappClient, getMessageFromContact, saveLastChatMes
             }
 
             try {
-                whatsappClient.getLastMessages(contactId, limit).then(result => {
-                    result.messages.forEach(msg => {
-                        whatsappClient._addToMessageQueue(msg);
+                whatsappClient.getLastMessages(contactId, limit)
+                    .then(result => {
+                        result.messages.forEach(msg => {
+                            whatsappClient._addToMessageQueue(msg);
+                        });
+                        console.log('messages has been updated!');
+                        socket.emit('last-messages', result);
+                    })
+                    .catch(error => {
+                        console.error('❌ Error in getLastMessages:', error);
+                        socket.emit('last-messages', {
+                            success: false,
+                            error: error.message
+                        });
                     });
-                    console.log('messages has been updated!');
-                    socket.emit('last-messages', result);
-                }).catch(error => {
-                    console.error('❌ Error in getLastMessages:', error);
-                    socket.emit('last-messages', {
-                        success: false,
-                        error: error.message
-                    });
-                });
             } catch (error) {
                 console.error('❌ Error getting last messages:', error);
                 socket.emit('last-messages', {
@@ -92,10 +104,16 @@ function socketRoutes(io, whatsappClient, getMessageFromContact, saveLastChatMes
         // Obter lista de chats
         socket.on('get-chat-list', () => {
             console.log('get-chat-list');
-            whatsappClient.getChatList().then(chatList => {
-                saveLastChatMessageMass(chatList, whatsappClient.getClientInfo().number).then(() => { });
-                socket.emit('chat-list', chatList);
-            }).catch(error => console.error('error', error.message));
+            whatsappClient.getChatList()
+                .then(chatList => {
+                    saveLastChatMessageMass(chatList, whatsappClient.getClientInfo().number)
+                        .catch(err => console.error('Error saving chat messages:', err));
+                    socket.emit('chat-list', chatList);
+                })
+                .catch(error => {
+                    console.error('❌ Error getting chat list:', error);
+                    socket.emit('chat-list', []);
+                });
         });
     });
 }

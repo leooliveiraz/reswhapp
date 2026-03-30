@@ -27,6 +27,103 @@ class WhatsAppClient {
         // Fila de mensagens pendentes
         this.messageList = {};
         this.isProcessingMessages = false;
+
+        // Controle de reconexão
+        this.isReconnecting = false;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = options.maxReconnectAttempts || 5;
+        this.reconnectDelay = options.reconnectDelay || 5000;
+    }
+
+    /**
+     * Wrapper para operações com retry e timeout
+     */
+    async _withRetry(operation, options = {}) {
+        const {
+            maxAttempts = 3,
+            delay = 2000,
+            timeout = this.chromeTimeout,
+            onError = null,
+            operationName = 'Operation'
+        } = options;
+
+        let lastError;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                // Timeout na operação
+                const result = await Promise.race([
+                    operation(),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error(`${operationName} timeout after ${timeout}ms`)), timeout)
+                    )
+                ]);
+                return result;
+            } catch (error) {
+                lastError = error;
+                console.error(`${operationName} - Attempt ${attempt}/${maxAttempts} failed:`, error.message);
+
+                if (onError) {
+                    try {
+                        await onError(error, attempt);
+                    } catch (callbackError) {
+                        console.error('Error in onError callback:', callbackError);
+                    }
+                }
+
+                if (attempt < maxAttempts) {
+                    console.log(`Retrying ${operationName} in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        throw lastError;
+    }
+
+    /**
+     * Reinicia o cliente WhatsApp
+     */
+    async _reconnect() {
+        if (this.isReconnecting) {
+            console.log('Reconnection already in progress...');
+            return;
+        }
+
+        this.isReconnecting = true;
+        this.reconnectAttempts++;
+
+        try {
+            console.log(`🔄 Reconnecting... Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+
+            if (this.client) {
+                try {
+                    await this.client.destroy();
+                } catch (e) {
+                    console.error('Error destroying client:', e);
+                }
+                this.client = null;
+            }
+
+            this.isReady = false;
+            this.clientInfo = {};
+
+            await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
+
+            this.initialize();
+
+            console.log('✅ Reconnection initiated');
+        } catch (error) {
+            console.error('❌ Error on reconnect:', error);
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                console.log(`Next attempt in ${this.reconnectDelay * 2}ms`);
+                setTimeout(() => this._reconnect(), this.reconnectDelay * 2);
+            } else {
+                console.error('❌ Max reconnect attempts reached. Application will continue running but WhatsApp is disconnected.');
+            }
+        } finally {
+            this.isReconnecting = false;
+        }
     }
 
     /**
@@ -39,9 +136,20 @@ class WhatsAppClient {
             }),
             puppeteer: {
                 headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox'],
-                protocolTimeout: this.chromeTimeout
-            }
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu'
+                ],
+                protocolTimeout: this.chromeTimeout,
+                timeout: this.chromeTimeout
+            },
+            restartOnAuthFail: true,
+            takeoverOnConflict: true
         });
 
         this._setupEvents();
@@ -54,6 +162,43 @@ class WhatsAppClient {
      * Configura todos os eventos do WhatsApp
      */
     _setupEvents() {
+        // Evento de conexão estabelecida
+        this.client.on('authenticated', () => {
+            console.log('🔐 Authenticated!');
+        });
+
+        // Evento de falha de autenticação
+        this.client.on('auth_failure', async (msg) => {
+            console.error('❌ Authentication failure:', msg);
+            // Não reinicia automaticamente para evitar loop infinito
+            // mas mantém a aplicação rodando
+        });
+
+        // Evento de desconexão
+        this.client.on('disconnected', async (reason) => {
+            console.warn('⚠️ Disconnected:', reason);
+            this.isReady = false;
+            
+            // Tenta reconectar automaticamente
+            await this._reconnect();
+        });
+
+        // Evento de erro
+        this.client.on('error', async (err) => {
+            console.error('❌ WhatsApp Client error:', err);
+            // Mantém a aplicação rodando, apenas loga o erro
+        });
+
+        // Evento de loading screen (útil para debug)
+        this.client.on('loading_screen', (percent, message) => {
+            console.log(`⏳ Loading screen: ${percent}% - ${message}`);
+        });
+
+        // Evento de change state (útil para debug)
+        this.client.on('change_state', state => {
+            console.log(`🔄 Change state: ${state}`);
+        });
+
         this.client.on('ready', () => {
             this.clientInfo = {
                 name: this.client.info.pushname,
@@ -61,9 +206,10 @@ class WhatsAppClient {
                 id: this.client.info.wid._serialized
             };
             this.isReady = true;
-            
+            this.reconnectAttempts = 0; // Reseta contador de reconexão
+
             console.log(`Whatsapp Client is ready!\n${new Date()}\n${JSON.stringify(this.clientInfo)}`);
-            
+
             if (this.onReadyCallback) {
                 this.onReadyCallback(this.clientInfo);
             }
@@ -84,17 +230,52 @@ class WhatsAppClient {
 
         this.client.on('message_create', async m => {
             try {
-                console.log(m)
                 const msgData = await this.extractMessageData(m, true);
                 if (!msgData) return;
-                
+
                 this._addToMessageQueue(msgData);
-                
+
                 if (this.onMessageCallback) {
                     this.onMessageCallback(msgData);
                 }
             } catch (error) {
                 console.error("Message creation process error:", error);
+            }
+        });
+
+        // Listener para reações em mensagens
+        this.client.on('message_reaction', async reaction => {
+            try {
+                // Extrai o chatId do msgId (formato: "false::<chatId>::<messageId>")
+                const msgIdSerialized = reaction.msgId?._serialized || reaction.msgId;
+                const chatIdFromMsgId = msgIdSerialized ? msgIdSerialized.split('::')[1] : null;
+                
+                // Extrai o ID da mensagem original que foi reagida
+                const originalMsgId = msgIdSerialized ? msgIdSerialized.split('::').slice(2).join('::') : null;
+
+                const reactionData = {
+                    id: reaction.id?._serialized || reaction.id,
+                    msgId: msgIdSerialized,
+                    originalMsgId: originalMsgId, // ID da mensagem que foi reagida
+                    reaction: reaction.reaction || '',
+                    body: reaction.reaction || '', // Para compatibilidade
+                    timestamp: reaction.timestamp || Date.now(),
+                    from: reaction.senderId?._serialized || reaction.senderId,
+                    fromMe: reaction.senderId?.user === this.clientInfo?.number || false,
+                    type: 'reaction',
+                    chatId: reaction.id?.remote || chatIdFromMsgId,
+                    chatUser: chatIdFromMsgId?.split('@')[0] || null,
+                    senderId: reaction.senderId?.user || null,
+                    senderPushname: reaction.senderId?.pushName || null
+                };
+
+                this._addToMessageQueue(reactionData);
+
+                if (this.onMessageCallback) {
+                    this.onMessageCallback(reactionData);
+                }
+            } catch (error) {
+                console.error('Error processing message reaction:', error);
             }
         });
     }

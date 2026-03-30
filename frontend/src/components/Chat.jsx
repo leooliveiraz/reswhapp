@@ -28,7 +28,7 @@ export default function Chat() {
     if (messageElement) {
       messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
       messageElement.classList.add('message-highlighted');
-      
+
       // Remove o destaque após 2 segundos
       setTimeout(() => {
         messageElement.classList.remove('message-highlighted');
@@ -41,6 +41,43 @@ export default function Chat() {
 
   const handleQuotedClick = (quotedMessageId) => {
     scrollToMessage(quotedMessageId);
+  };
+
+  /**
+   * Processa mensagens para agrupar reações com suas mensagens originais
+   */
+  const processMessagesWithReactions = (messagesList) => {
+    if (!messagesList || !Array.isArray(messagesList)) return [];
+
+    // Separa reações das demais mensagens
+    const reactions = [];
+    const regularMessages = [];
+
+    messagesList.forEach(msg => {
+      if (msg.type === 'reaction') {
+        reactions.push(msg);
+      } else {
+        regularMessages.push(msg);
+      }
+    });
+
+    // Cria um mapa de reações por mensagem original
+    const reactionsByMessage = {};
+    reactions.forEach(reaction => {
+      const targetId = reaction.originalMsgId || reaction.msgId;
+      if (!reactionsByMessage[targetId]) {
+        reactionsByMessage[targetId] = [];
+      }
+      reactionsByMessage[targetId].push(reaction);
+    });
+
+    // Adiciona reações às mensagens originais
+    const messagesWithReactions = regularMessages.map(msg => ({
+      ...msg,
+      reactions: reactionsByMessage[msg.id] || []
+    }));
+
+    return messagesWithReactions;
   };
 
   useEffect(() => {
@@ -56,7 +93,8 @@ export default function Chat() {
     });
 
     const handleLastMessages = (lastMessages) => {
-      setMessages(lastMessages.messages || []);
+      const processedMessages = processMessagesWithReactions(lastMessages.messages || []);
+      setMessages(processedMessages);
       scrollToBottom();
     };
 
@@ -64,7 +102,38 @@ export default function Chat() {
 
     const handleNewMessage = (newMessage) => {
       if (selectedContact.id._serialized === newMessage.chatId) {
-        setMessages((prev) => [newMessage, ...prev]);
+        setMessages((prev) => {
+          // Se for reação, atualiza a mensagem existente
+          if (newMessage.type === 'reaction') {
+            const targetId = newMessage.originalMsgId || newMessage.msgId;
+            return prev.map(msg => {
+              if (msg.id === targetId) {
+                // Adiciona ou atualiza a reação
+                const existingReactions = msg.reactions || [];
+                const reactionIndex = existingReactions.findIndex(
+                  r => r.from === newMessage.from && r.id === newMessage.id
+                );
+                
+                if (reactionIndex >= 0) {
+                  // Atualiza reação existente
+                  const updated = [...existingReactions];
+                  updated[reactionIndex] = newMessage;
+                  return { ...msg, reactions: updated };
+                } else if (newMessage.reaction) {
+                  // Adiciona nova reação (se não estiver vazia)
+                  return { ...msg, reactions: [...existingReactions, newMessage] };
+                } else {
+                  // Reação removida (emoji vazio)
+                  return { ...msg, reactions: existingReactions.filter(r => r.id !== newMessage.id) };
+                }
+              }
+              return msg;
+            });
+          }
+          
+          // Mensagem normal - adiciona na lista
+          return [newMessage, ...prev];
+        });
       }
     };
 
@@ -89,6 +158,7 @@ export default function Chat() {
             msg={msg}
             contactName={selectedContact?.name}
             isOwn={msg.isMe}
+            allMessages={messages}
             onQuotedClick={handleQuotedClick}
           />
         ))}

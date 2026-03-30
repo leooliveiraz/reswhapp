@@ -10,6 +10,74 @@ require('dotenv').config();
 const healthRoutes = require('./routes/healthRoutes');
 const socketRoutes = require('./routes/socketRoutes');
 
+// ============================================
+// GLOBAL ERROR HANDLERS - Previne crash da aplicação
+// ============================================
+
+// Previne crash por erros não capturados em Promises
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ [UNHANDLED REJECTION] at:', promise, 'reason:', reason);
+    // NÃO encerra o processo - mantém a aplicação rodando
+});
+
+// Previne crash por exceções não capturadas
+process.on('uncaughtException', (error) => {
+    console.error('❌ [UNCAUGHT EXCEPTION]:', error);
+    // NÃO encerra o processo - mantém a aplicação rodando
+});
+
+// Previne crash por erros de ECONNRESET, EPIPE, etc.
+process.on('error', (error) => {
+    console.error('❌ [PROCESS ERROR]:', error);
+    // NÃO encerra o processo - mantém a aplicação rodando
+});
+
+// Graceful shutdown (opcional - apenas se realmente precisar encerrar)
+let isShuttingDown = false;
+
+const gracefulShutdown = async (signal) => {
+    if (isShuttingDown) {
+        console.warn(`⚠️ Already shutting down, ignoring duplicate ${signal} signal`);
+        return;
+    }
+
+    isShuttingDown = true;
+    console.log(`\n🛑 ${signal} received. Starting graceful shutdown...`);
+
+    try {
+        // Fecha servidor HTTP
+        if (server) {
+            await new Promise((resolve) => {
+                server.close(resolve);
+                setTimeout(resolve, 5000); // Force close after 5s
+            });
+            console.log('✅ HTTP server closed');
+        }
+
+        // Fecha cliente WhatsApp
+        if (whatsappClient && whatsappClient.getClient()) {
+            await whatsappClient.getClient().destroy();
+            console.log('✅ WhatsApp client destroyed');
+        }
+
+        // Fecha conexões do MongoDB (se existir)
+        const mongoose = require('mongoose');
+        if (mongoose.connection.readyState === 1) {
+            await mongoose.connection.close();
+            console.log('✅ MongoDB connection closed');
+        }
+
+        console.log('✅ Graceful shutdown completed');
+        process.exit(0);
+    } catch (error) {
+        console.error('❌ Error during graceful shutdown:', error);
+        process.exit(1);
+    }
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 // server config
 const PORT = 3000;
 const app = express();
@@ -47,17 +115,23 @@ const whatsappClient = new WhatsAppClient({
 
         whatsappClient.getChatList().then(chatList => {
             saveLastChatMessageMass(chatList, clientInfo.number).then(() => { });
+        }).catch(error => {
+            console.error('Error getting chat list on startup:', error);
         });
 
         // Processa fila de mensagens a cada 10 segundos
         setInterval(() => {
-            whatsappClient.processMessageQueue().then(() => { });
+            whatsappClient.processMessageQueue().catch(error => {
+                console.error('Error processing message queue:', error);
+            });
         }, 10 * 1000);
 
         // Atualiza lista de chats a cada 5 minutos
         setInterval(() => {
             whatsappClient.getChatList().then(chatList => {
                 saveLastChatMessageMass(chatList, clientInfo.number).then(() => { });
+            }).catch(error => {
+                console.error('Error updating chat list:', error);
             });
         }, 5 * 60 * 1000);
     },
@@ -74,20 +148,24 @@ const whatsappClient = new WhatsAppClient({
 
     // Callback para novas mensagens
     onMessage: async (msg) => {
-        await saveMessage(msg, whatsappClient.getClientInfo().number);
-        await saveLastChatMessage(msg, whatsappClient.getClientInfo().number);
+        try {
+            await saveMessage(msg, whatsappClient.getClientInfo().number);
+            await saveLastChatMessage(msg, whatsappClient.getClientInfo().number);
 
-        console.log("New message", msg.from, msg.body);
-        const sockets = await io.fetchSockets();
-        console.log(`4️⃣ Sockets encontrados: ${sockets.length}`);
+            console.log("New message", msg.from, msg.body);
+            const sockets = await io.fetchSockets();
+            console.log(`4️⃣ Sockets encontrados: ${sockets.length}`);
 
-        sockets.forEach((socket, i) => {
-            console.log(`   Socket ${i}: ${socket.id}`);
-            socket.emit("new-message", msg);
-            console.log(`   ✅ Emitido para socket ${socket.id}`);
-        });
+            sockets.forEach((socket, i) => {
+                console.log(`   Socket ${i}: ${socket.id}`);
+                socket.emit("new-message", msg);
+                console.log(`   ✅ Emitido para socket ${socket.id}`);
+            });
 
-        console.log("5️⃣ Finalizado emissão");
+            console.log("5️⃣ Finalizado emissão");
+        } catch (error) {
+            console.error('Error processing new message:', error);
+        }
     }
 });
 
