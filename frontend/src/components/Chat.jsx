@@ -94,47 +94,61 @@ export default function Chat() {
 
     const handleLastMessages = (lastMessages) => {
       const processedMessages = processMessagesWithReactions(lastMessages.messages || []);
-      setMessages(processedMessages);
+      // Ordena por timestamp (mais antigas primeiro, mais recentes no final)
+      const sortedMessages = [...processedMessages].sort((a, b) => a.timestamp - b.timestamp);
+      setMessages(sortedMessages);
       scrollToBottom();
     };
 
     socket.on("last-messages", handleLastMessages);
 
     const handleNewMessage = (newMessage) => {
-      if (selectedContact.id._serialized === newMessage.chatId) {
-        setMessages((prev) => {
-          // Se for reação, atualiza a mensagem existente
-          if (newMessage.type === 'reaction') {
-            const targetId = newMessage.originalMsgId || newMessage.msgId;
-            return prev.map(msg => {
-              if (msg.id === targetId) {
-                // Adiciona ou atualiza a reação
-                const existingReactions = msg.reactions || [];
-                const reactionIndex = existingReactions.findIndex(
-                  r => r.from === newMessage.from && r.id === newMessage.id
-                );
-                
-                if (reactionIndex >= 0) {
-                  // Atualiza reação existente
-                  const updated = [...existingReactions];
-                  updated[reactionIndex] = newMessage;
-                  return { ...msg, reactions: updated };
-                } else if (newMessage.reaction) {
-                  // Adiciona nova reação (se não estiver vazia)
-                  return { ...msg, reactions: [...existingReactions, newMessage] };
-                } else {
-                  // Reação removida (emoji vazio)
-                  return { ...msg, reactions: existingReactions.filter(r => r.id !== newMessage.id) };
-                }
+      if (!selectedContact || !newMessage) return;
+      if (selectedContact.id._serialized !== newMessage.chatId) return;
+
+      setMessages((prev) => {
+        // Se for reação, atualiza a mensagem existente
+        if (newMessage.type === 'reaction') {
+          const targetId = newMessage.originalMsgId || newMessage.msgId;
+          return prev.map(msg => {
+            if (msg.id === targetId) {
+              // Adiciona ou atualiza a reação
+              const existingReactions = msg.reactions || [];
+              const reactionIndex = existingReactions.findIndex(
+                r => r.from === newMessage.from && r.id === newMessage.id
+              );
+
+              if (reactionIndex >= 0) {
+                // Atualiza reação existente
+                const updated = [...existingReactions];
+                updated[reactionIndex] = newMessage;
+                return { ...msg, reactions: updated };
+              } else if (newMessage.reaction) {
+                // Adiciona nova reação (se não estiver vazia)
+                return { ...msg, reactions: [...existingReactions, newMessage] };
+              } else {
+                // Reação removida (emoji vazio)
+                return { ...msg, reactions: existingReactions.filter(r => r.id !== newMessage.id) };
               }
-              return msg;
-            });
-          }
-          
-          // Mensagem normal - adiciona na lista
-          return [newMessage, ...prev];
-        });
-      }
+            }
+            return msg;
+          });
+        }
+
+        // Verifica se a mensagem já existe para não duplicar
+        const messageExists = prev.some(msg => msg.id === newMessage.id);
+        if (messageExists) {
+          return prev;
+        }
+
+        // Mensagem normal - adiciona no final da lista
+        return [...prev, newMessage];
+      });
+
+      // Scroll para o final após adicionar mensagem
+      setTimeout(() => {
+        scrollToBottom();
+      }, 50);
     };
 
     socket.on("new-message", handleNewMessage);

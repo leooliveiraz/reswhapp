@@ -79,7 +79,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // server config
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -93,9 +93,6 @@ const io = new Server(server, {
 });
 app.use(express.static('public'));
 app.use('/images', express.static(path.join(__dirname, 'downloads')));
-
-const MessageProcessor = require('./services/messageProcessor.js');
-const processor = new MessageProcessor('./messages/');
 
 // Inicializa cliente WhatsApp encapsulado
 const whatsappClient = new WhatsAppClient({

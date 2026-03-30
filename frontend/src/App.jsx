@@ -18,18 +18,6 @@ function App() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [currentMedia, setCurrentMedia] = useState(null);
 
-  const handleSelectContact = (contact) => {
-    setSelectedContact(contact);
-
-    setChatList((prevChatList) =>
-      prevChatList.map((chat) =>
-        chat.id._serialized === contact.id._serialized
-          ? { ...chat, unreadCount: 0 }
-          : chat,
-      ),
-    );
-  };
-
   useEffect(() => {
     setViewerOpen(currentMedia ? true : false);
   }, [currentMedia]);
@@ -131,7 +119,7 @@ function App() {
     <AppContext.Provider
       value={{
         selectedContact,
-        setSelectedContact: handleSelectContact,
+        setSelectedContact,
         chatList,
         setChatList,
         socket: socketRef.current,
