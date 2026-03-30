@@ -84,6 +84,7 @@ class WhatsAppClient {
 
         this.client.on('message_create', async m => {
             try {
+                console.log(m)
                 const msgData = await this.extractMessageData(m, true);
                 if (!msgData) return;
                 
@@ -153,23 +154,23 @@ class WhatsAppClient {
      * @returns {Object} Dados da mensagem formatados
      */
     async extractMessageData(message, realizeDownload = false) {
-        if (message.from === 'status@broadcast' || 
-            message.id.remote === 'status@broadcast' || 
+        if (message.from === 'status@broadcast' ||
+            message.id.remote === 'status@broadcast' ||
             message._data.remote === 'status@broadcast') {
             return;
         }
-        
+
         if (SHOW_MESSAGES) console.log("Received message", message);
-        
+
         const chat = await message.getChat();
         const me = message.notifyName;
         const isGroup = message.from.includes('@g.us');
         const isMe = message.fromMe;
-        
+
         let messageInfo = '';
         let contactName = "";
         let contact = null;
-        
+
         try {
             contact = await message.getContact();
             contactName = contact.pushname || contact.name || contact.number || 'Unknown';
@@ -207,30 +208,53 @@ class WhatsAppClient {
             location: message.location
         };
 
+        // Extrai dados essenciais da mensagem respondida (apenas o necessário para exibição)
+        if (message.hasQuotedMsg) {
+            try {
+                const quotedMsg = await message.getQuotedMessage();
+                if (quotedMsg) {
+                    const quotedContact = await quotedMsg.getContact().catch(() => null);
+                    msgData.quotedMsg = {
+                        id: quotedMsg.id._serialized,
+                        body: quotedMsg.body || '',
+                        type: quotedMsg.type || 'chat',
+                        subtype: quotedMsg.subtype || null,
+                        timestamp: quotedMsg.timestamp,
+                        from: quotedMsg.from,
+                        fromMe: quotedMsg.fromMe,
+                        contactName: quotedContact?.pushname || quotedContact?.name || 'Unknown',
+                        hasMedia: quotedMsg.hasMedia
+                    };
+                }
+            } catch (e) {
+                console.error('Error extracting quoted message:', e.message);
+            }
+        }
+
         if (realizeDownload && msgData.hasMedia) {
             const downloadFileData = this._ensureContactDir(msgData.chatId);
             const contactDir = downloadFileData.dirPath;
             const media = await message.downloadMedia();
-            
+
             if (media) {
                 const timestamp = Date.now();
                 const fileName = this._generateFileName(contactName, media.mimetype, timestamp);
                 const filePath = path.join(contactDir, fileName);
-                
+
                 console.log(filePath);
                 fs.writeFileSync(filePath, media.data, 'base64');
 
                 console.log(`✅ Imagem salva em: ${filePath}`);
                 console.log(`   Tipo: ${media.mimetype}`);
                 console.log(`   Tamanho: ${Math.round(media.data.length * 0.75 / 1024)} KB`);
-                
+
                 msgData.filePathRelative = filePath;
                 msgData.filePathAbsolute = path.resolve(filePath);
                 msgData.filePathDir = downloadFileData.safeName;
                 msgData.fileName = fileName;
             }
         }
-        
+
         return msgData;
     }
 

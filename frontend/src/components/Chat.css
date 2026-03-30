@@ -1,14 +1,32 @@
 .chat-messages {
     padding: 10px;
-    width: 100%; /* Ocupa toda largura disponível */
-    max-width: 100%; /* Não ultrapassa o container */
-    overflow-x: hidden; /* Esconde scroll horizontal */
-    box-sizing: border-box; /* Inclui padding na largura total */
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
 }
 
 .chat-messages > div {
-    max-width: 100%; /* Cada mensagem não ultrapassa o container */
-    word-wrap: break-word; /* Quebra palavras longas */
-    word-break: break-word; /* Força quebra de palavras */
-    white-space: pre-wrap; /* Preserva espaços mas quebra linhas */
+    max-width: 100%;
+    word-wrap: break-word;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+/* Destaque para mensagem clicada via reply */
+.message-highlighted {
+    animation: highlight-pulse 2s ease-in-out;
+}
+
+@keyframes highlight-pulse {
+    0% {
+        background-color: transparent;
+    }
+    20% {
+        background-color: rgba(0, 168, 132, 0.3);
+        border-radius: 12px;
+    }
+    100% {
+        background-color: transparent;
+    }
 }

@@ -15,7 +15,7 @@ import { AppContext } from "../AppContext";
 
 const IMAGE_URL = import.meta.env.VITE_IMAGE_URL;
 
-export default function Message({ msg, contactName, isOwn, allMessages }) {
+export default function Message({ msg, contactName, isOwn, allMessages, onQuotedClick }) {
   const { setViewerOpen, setCurrentMedia } = useContext(AppContext);
 
   const nome = isOwn ? "Você" : msg.contactName;
@@ -82,15 +82,12 @@ export default function Message({ msg, contactName, isOwn, allMessages }) {
 
   return (
     <>
-      <div className={`message ${isOwn ? "own" : "other"}`}>
+      <div className={`message ${isOwn ? "own" : "other"}`} id={`msg-${msg.id}`}>
         {!isOwn && <div className="message-sender">{nome}</div>}
         <div className="message-bubble">
           {/* Mensagem respondida */}
           {quotedMsg && (
-            <QuotedMessage quotedMsg={quotedMsg} isOwn={isOwn} />
-          )}
-          {(
-            console.log(msg)
+            <QuotedMessage quotedMsg={quotedMsg} isOwn={isOwn} onQuotedClick={onQuotedClick} />
           )}
 
           {/* Imagem */}

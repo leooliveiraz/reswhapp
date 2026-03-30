@@ -17,6 +17,32 @@ export default function Chat() {
     }, 100);
   };
 
+  const scrollToMessage = (messageId) => {
+    // Remove destaque anterior
+    document.querySelectorAll('.message-highlighted').forEach(el => {
+      el.classList.remove('message-highlighted');
+    });
+
+    // Tenta encontrar a mensagem no DOM
+    const messageElement = document.getElementById(`msg-${messageId}`);
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      messageElement.classList.add('message-highlighted');
+      
+      // Remove o destaque após 2 segundos
+      setTimeout(() => {
+        messageElement.classList.remove('message-highlighted');
+      }, 2000);
+    } else {
+      // Mensagem não encontrada, pode estar fora do limite carregado
+      console.log('Mensagem original não encontrada na lista atual');
+    }
+  };
+
+  const handleQuotedClick = (quotedMessageId) => {
+    scrollToMessage(quotedMessageId);
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -63,6 +89,7 @@ export default function Chat() {
             msg={msg}
             contactName={selectedContact?.name}
             isOwn={msg.isMe}
+            onQuotedClick={handleQuotedClick}
           />
         ))}
         <div ref={messagesEndRef} className="chat-messages" />
