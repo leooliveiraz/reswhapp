@@ -8,7 +8,7 @@ import ImageViewer from "./components/ImageViewer";
 const WS_URL = import.meta.env.VITE_SOCKET_URL;
 const IMAGE_URL = import.meta.env.VITE_IMAGE_URL;
 
-console.log(WS_URL,IMAGE_URL)
+console.log(WS_URL, IMAGE_URL);
 function App() {
   const socketRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -23,17 +23,23 @@ function App() {
   }, [currentMedia]);
 
   useEffect(() => {
-    const socketUrl = WS_URL ;
+    // Previne criação de conexão duplicada
+    if (socketRef.current && socketRef.current.connected) {
+      console.log("⚠️ Socket already connected, skipping duplicate connection");
+      return;
+    }
+
+    const socketUrl = WS_URL;
     socketRef.current = io(socketUrl, {
-      path: '/socket.io',
-      transports: ['websocket', 'polling'],
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       timeout: 20000,
-      autoConnect: true
+      autoConnect: true,
     });
-    
+
     const socket = socketRef.current;
 
     socket.on("connect", () => {
@@ -48,10 +54,10 @@ function App() {
     socket.on("connect_error", (error) => {
       console.error("❌ Connection error:", error.message);
       setIsConnected(false);
-      
-      if (error.message.includes('websocket')) {
+
+      if (error.message.includes("websocket")) {
         console.log("🔄 Tentando com polling...");
-        socket.io.opts.transports = ['polling'];
+        socket.io.opts.transports = ["polling"];
         socket.connect();
       }
     });
@@ -59,7 +65,7 @@ function App() {
     socket.on("disconnect", (reason) => {
       console.log("🔴 Disconnected:", reason);
       setIsConnected(false);
-      
+
       if (reason === "io server disconnect") {
         socket.connect();
       }
@@ -105,26 +111,31 @@ function App() {
     // Listener para ack de mensagens (atualiza status de entrega/leitura)
     socket.on("message-ack", (ackData) => {
       const ackIcons = {
-        0: '❌ ERROR',
-        1: '✓ SENT',
-        2: '✓✓ DELIVERED',
-        3: '✓✓🔵 READ',
-        4: '✓✓🔵🔊 PLAYED'
+        0: "❌ ERROR",
+        1: "✓ SENT",
+        2: "✓✓ DELIVERED",
+        3: "✓✓🔵 READ",
+        4: "✓✓🔵🔊 PLAYED",
       };
-      
-      console.log(`📨 ACK ${ackIcons[ackData.ack] || ackData.ackStatus}: ${ackData.id.substring(0, 40)}...`);
+
+      console.log(
+        `📨 ACK ${ackIcons[ackData.ack] || ackData.ackStatus}: ${ackData.id.substring(0, 40)}...`,
+      );
 
       // Atualiza o ack na lista de chats
       setChatList((prevChatList) => {
         return prevChatList.map((chat) => {
-          if (chat.id?._serialized === ackData.chatId && chat.lastMessage?.id === ackData.id) {
+          if (
+            chat.id?._serialized === ackData.chatId &&
+            chat.lastMessage?.id === ackData.id
+          ) {
             return {
               ...chat,
               lastMessage: {
                 ...chat.lastMessage,
                 ack: ackData.ack,
-                ackStatus: ackData.ackStatus
-              }
+                ackStatus: ackData.ackStatus,
+              },
             };
           }
           return chat;
@@ -140,9 +151,7 @@ function App() {
       socket.off("chat-list");
       socket.off("new-message");
       socket.off("message-ack");
-      if (socket.connected) {
-        socket.disconnect();
-      }
+      socket.disconnect();
     };
   }, []);
 

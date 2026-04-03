@@ -388,6 +388,7 @@ class WhatsAppClient {
                         timestamp: quotedMsg.timestamp,
                         from: quotedMsg.from,
                         fromMe: quotedMsg.fromMe,
+                        isMe: quotedMsg.fromMe,
                         contactName: quotedContact?.pushname || quotedContact?.name || 'Unknown',
                         hasMedia: quotedMsg.hasMedia
                     };
