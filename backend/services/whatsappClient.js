@@ -257,6 +257,7 @@ class WhatsAppClient {
                     timestamp: reaction.timestamp || Date.now(),
                     from: reaction.senderId?._serialized || reaction.senderId,
                     fromMe: reaction.senderId?.user === this.clientInfo?.number || false,
+                    isMe: reaction.senderId?.user === this.clientInfo?.number || false,
                     type: 'reaction',
                     chatId: reaction.id?.remote || chatIdFromMsgId,
                     chatUser: chatIdFromMsgId?.split('@')[0] || null,
