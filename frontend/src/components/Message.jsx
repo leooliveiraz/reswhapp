@@ -188,6 +188,11 @@ export default function Message({ msg, contactName, isOwn, allMessages, onQuoted
             <div className="message-text">🔒 Mensagem privada 🔒</div>
           )}
 
+          {/* Mensagem privada criptografada */}
+          {msg.type === "ciphertext" && (
+            <div className="message-text">🔒 Mensagem privada 🔒</div>
+          )}
+
           {/* Texto da mensagem */}
           {mensagem && <div className="message-text">{mensagem}</div>}
 

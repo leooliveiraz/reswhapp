@@ -200,7 +200,7 @@ export default function Chat() {
             key={msg.id}
             msg={msg}
             contactName={selectedContact?.name}
-            isOwn={msg.isMe}
+            isOwn={msg.isMe || msg.fromMe}
             allMessages={messages}
             onQuotedClick={handleQuotedClick}
           />
